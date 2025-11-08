@@ -18,15 +18,26 @@ class LancamentoFinanceiro {
             $data['descricao'],
             $data['valor'],
             $data['data_vencimento'],
-            $data['tipo'], // O 'tipo' do formulário corresponde ao 'tipo_lancamento' do banco
+            $data['tipo'],
             $data['categoria_id'],
             $data['cliente_id'] ?? null,
             $data['processo_id'] ?? null,
             $status,
             $data['eh_agregado'] ?? 0,
             $data['itens_agregados_ids'] ?? null,
-            $data['data_lancamento'] ?? date('Y-m-d H:i:s')
-        ]);
+            $data['data_lancamento'] ?? date('Y-m-d H:i:s'),
+        ];
+
+        if (array_key_exists('userid', $data)) {
+            $columns[] = 'userid';
+            $values[] = $data['userid'];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $sql = 'INSERT INTO lancamentos_financeiros (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+        $stmt = $this->pdo->prepare($sql);
+
+        return $stmt->execute($values);
     }
 
     /**
