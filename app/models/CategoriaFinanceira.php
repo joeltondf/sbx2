@@ -225,7 +225,7 @@ class CategoriaFinanceira
 
     // NOVO MÉTODO: Atualiza um produto de orçamento.
     public function updateProdutoOrcamento($id, $data) {
-        $sql = "UPDATE categorias_financeiras SET nome_categoria = ?, valor_padrao = ?, servico_tipo = ?, bloquear_valor_minimo = ?, ativo = ? WHERE id = ? AND eh_produto_orcamento = 1";
+        $sql = "UPDATE categorias_financeiras SET nome_categoria = ?, valor_padrao = ?, servico_tipo = ?, bloquear_valor_minimo = ?, ativo = ?, tipo_lancamento = 'RECEITA', eh_produto_orcamento = 1 WHERE id = ? AND eh_produto_orcamento = 1";
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([
             $data['nome_categoria'],
