@@ -362,18 +362,64 @@ class ClientesController
 
         $telefone = trim((string) ($data['telefone'] ?? ''));
         $telefoneDdi = trim((string) ($data['telefone_ddi'] ?? ''));
+        $telefoneDdd = trim((string) ($data['telefone_ddd'] ?? ''));
+        $telefoneNumero = trim((string) ($data['telefone_numero'] ?? ''));
 
-        if ($requirePhone && $telefone === '') {
-            $errors[] = 'Informe o telefone.';
+        $telefoneDddDigits = stripNonDigits($telefoneDdd);
+        $telefoneNumeroDigits = stripNonDigits($telefoneNumero);
+
+        if (($telefoneDddDigits === '' || $telefoneNumeroDigits === '') && $telefone !== '') {
+            $legacyDigits = stripNonDigits($telefone);
+            if ($legacyDigits !== '') {
+                if ($telefoneDdi !== '') {
+                    $ddiDigits = stripNonDigits($telefoneDdi);
+                    if ($ddiDigits !== '' && strpos($legacyDigits, $ddiDigits) === 0 && strlen($legacyDigits) > strlen($ddiDigits)) {
+                        $legacyDigits = substr($legacyDigits, strlen($ddiDigits));
+                    }
+                }
+
+                if (strlen($legacyDigits) > 11) {
+                    $extraDigits = strlen($legacyDigits) - 11;
+                    if ($extraDigits >= 1 && $extraDigits <= 4) {
+                        $legacyDigits = substr($legacyDigits, $extraDigits);
+                    }
+                }
+
+                if ($telefoneDddDigits === '' && strlen($legacyDigits) > 2) {
+                    $telefoneDddDigits = substr($legacyDigits, 0, 2);
+                }
+
+                if ($telefoneNumeroDigits === '' && strlen($legacyDigits) > 2) {
+                    $telefoneNumeroDigits = substr($legacyDigits, 2);
+                }
+            }
         }
 
-        if ($telefone !== '') {
+        $hasPhoneInput = $telefone !== '' || $telefoneDddDigits !== '' || $telefoneNumeroDigits !== '';
+
+        if ($requirePhone && ($telefoneDddDigits === '' || $telefoneNumeroDigits === '')) {
+            $errors[] = 'Informe o telefone completo (DDD e número).';
+        }
+
+        if ($hasPhoneInput) {
             $ddiToValidate = $telefoneDdi !== '' ? $telefoneDdi : self::DEFAULT_PHONE_DDI;
 
             try {
                 normalizeDDI($ddiToValidate);
             } catch (InvalidArgumentException $exception) {
                 $errors[] = $exception->getMessage();
+            }
+
+            if ($telefoneDddDigits === '') {
+                $errors[] = 'Informe o DDD do telefone.';
+            } elseif (strlen($telefoneDddDigits) < 2 || strlen($telefoneDddDigits) > 4) {
+                $errors[] = 'Informe um DDD válido.';
+            }
+
+            if ($telefoneNumeroDigits === '') {
+                $errors[] = 'Informe o número de telefone.';
+            } elseif (strlen($telefoneNumeroDigits) < 4 || strlen($telefoneNumeroDigits) > 20) {
+                $errors[] = 'Informe um número de telefone válido.';
             }
         }
 
@@ -490,6 +536,14 @@ class ClientesController
             $data['telefone_ddi'] = trim((string) $data['telefone_ddi']);
         }
 
+        if (array_key_exists('telefone_ddd', $data)) {
+            $data['telefone_ddd'] = trim((string) $data['telefone_ddd']);
+        }
+
+        if (array_key_exists('telefone_numero', $data)) {
+            $data['telefone_numero'] = trim((string) $data['telefone_numero']);
+        }
+
         $data['nome_cliente'] = trim((string) ($data['nome_cliente'] ?? ''));
         if (array_key_exists('nome_responsavel', $data)) {
             $data['nome_responsavel'] = trim((string) $data['nome_responsavel']);
@@ -596,14 +650,21 @@ class ClientesController
 
     private function normalizePhoneData(array $data): array
     {
-        if (!array_key_exists('telefone', $data)) {
+        $hasPhoneData = array_key_exists('telefone', $data)
+            || array_key_exists('telefone_ddi', $data)
+            || array_key_exists('telefone_ddd', $data)
+            || array_key_exists('telefone_numero', $data);
+
+        if (!$hasPhoneData) {
             return $data;
         }
 
-        $telefone = trim((string) $data['telefone']);
+        $telefone = trim((string) ($data['telefone'] ?? ''));
         $telefoneDdi = trim((string) ($data['telefone_ddi'] ?? ''));
+        $telefoneDdd = trim((string) ($data['telefone_ddd'] ?? ''));
+        $telefoneNumero = trim((string) ($data['telefone_numero'] ?? ''));
 
-        if ($telefone === '') {
+        if ($telefone === '' && $telefoneDdd === '' && $telefoneNumero === '') {
             $data['telefone'] = null;
             $data['telefone_ddi'] = null;
             $data['telefone_ddd'] = null;
@@ -612,16 +673,55 @@ class ClientesController
             return $data;
         }
 
-        $parts = extractPhoneParts($telefone);
-        $ddd = $parts['ddd'];
-        $phone = $parts['phone'];
-
         $ddi = $telefoneDdi !== '' ? normalizeDDI($telefoneDdi) : self::DEFAULT_PHONE_DDI;
 
-        $data['telefone'] = $ddi . ($ddd ?? '') . ($phone ?? '');
+        $dddDigits = stripNonDigits($telefoneDdd);
+        $numeroDigits = stripNonDigits($telefoneNumero);
+
+        if (($dddDigits === '' || $numeroDigits === '') && $telefone !== '') {
+            $guessedParts = $this->guessPhonePartsFromLegacy($telefone);
+
+            if ($dddDigits === '' && !empty($guessedParts['ddd'])) {
+                $dddDigits = (string) $guessedParts['ddd'];
+            }
+
+            if ($numeroDigits === '' && !empty($guessedParts['number'])) {
+                $numeroDigits = (string) $guessedParts['number'];
+            }
+
+            if ($telefoneDdi === '' && !empty($guessedParts['ddi'])) {
+                $ddi = normalizeDDI((string) $guessedParts['ddi']);
+            }
+        }
+
+        if ($dddDigits === '' || $numeroDigits === '') {
+            $data['telefone'] = null;
+            $data['telefone_ddi'] = null;
+            $data['telefone_ddd'] = null;
+            $data['telefone_numero'] = null;
+
+            return $data;
+        }
+
+        if (strlen($dddDigits) < 2 || strlen($dddDigits) > 4) {
+            throw new InvalidArgumentException('Informe um DDD válido.');
+        }
+
+        if (strlen($numeroDigits) < 4) {
+            throw new InvalidArgumentException('Informe um número de telefone válido.');
+        }
+
+        $numeroDigits = substr($numeroDigits, 0, 20);
+
+        $telefoneFormatado = formatarTelefone($ddi, $dddDigits, $numeroDigits);
+        if ($telefoneFormatado === '-') {
+            $telefoneFormatado = sprintf('+%s (%s) %s', $ddi, $dddDigits, $numeroDigits);
+        }
+
+        $data['telefone'] = $telefoneFormatado;
         $data['telefone_ddi'] = $ddi;
-        $data['telefone_ddd'] = $ddd;
-        $data['telefone_numero'] = $phone;
+        $data['telefone_ddd'] = $dddDigits;
+        $data['telefone_numero'] = $numeroDigits;
 
         return $data;
     }
@@ -629,6 +729,80 @@ class ClientesController
     private function generateClientIntegrationCode(int $clientId): string
     {
         return 'CLI-' . str_pad((string)$clientId, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function guessPhonePartsFromLegacy(string $value): array
+    {
+        $digits = stripNonDigits($value);
+        if ($digits === '') {
+            return ['ddi' => null, 'ddd' => null, 'number' => null];
+        }
+
+        $length = strlen($digits);
+        if ($length <= 11) {
+            $ddd = substr($digits, 0, min(2, $length));
+            $number = substr($digits, strlen($ddd));
+
+            return [
+                'ddi' => null,
+                'ddd' => $ddd !== '' ? $ddd : null,
+                'number' => $number !== '' ? $number : null,
+            ];
+        }
+
+        $possibleNumberLengths = [9, 8, 7, 6, 5, 4];
+        $bestCandidate = null;
+        foreach ($possibleNumberLengths as $numberLength) {
+            $ddiLength = $length - 2 - $numberLength;
+            if ($ddiLength < 1 || $ddiLength > 4) {
+                continue;
+            }
+
+            if ($length < $ddiLength + 2 + $numberLength) {
+                continue;
+            }
+
+            $ddi = substr($digits, 0, $ddiLength);
+            $rest = substr($digits, $ddiLength);
+            $ddd = substr($rest, 0, 2);
+            $number = substr($rest, 2);
+
+            if (strlen($number) >= 4) {
+                $score = 0;
+                if ($ddiLength >= 2) {
+                    $score += 2;
+                }
+                if ($numberLength >= 8) {
+                    $score += 1;
+                }
+
+                if ($bestCandidate === null || $score > $bestCandidate['score']) {
+                    $bestCandidate = [
+                        'ddi' => $ddi !== '' ? $ddi : null,
+                        'ddd' => $ddd !== '' ? $ddd : null,
+                        'number' => $number !== '' ? $number : null,
+                        'score' => $score,
+                    ];
+                }
+            }
+        }
+
+        if ($bestCandidate !== null) {
+            unset($bestCandidate['score']);
+            return $bestCandidate;
+        }
+
+        $restLength = min(11, $length);
+        $rest = substr($digits, -$restLength);
+        $ddi = substr($digits, 0, $length - strlen($rest));
+        $ddd = substr($rest, 0, 2);
+        $number = substr($rest, 2);
+
+        return [
+            'ddi' => $ddi !== '' ? $ddi : null,
+            'ddd' => $ddd !== '' ? $ddd : null,
+            'number' => $number !== '' ? $number : null,
+        ];
     }
 
     // O método syncOmie manual pode ser mantido ou removido, já que agora é automático.
