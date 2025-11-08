@@ -9,22 +9,44 @@ class LancamentoFinanceiro {
     }
 
     public function create($data) {
-        // O nome da coluna no INSERT está 'tipo', mas no banco é 'tipo_lancamento'. Vamos corrigir isso.
-        $sql = "INSERT INTO lancamentos_financeiros (descricao, valor, data_vencimento, tipo_lancamento, categoria_id, cliente_id, processo_id, status, eh_agregado, itens_agregados_ids, data_lancamento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([
+        $columns = [
+            'descricao',
+            'valor',
+            'data_vencimento',
+            'tipo_lancamento',
+            'categoria_id',
+            'cliente_id',
+            'processo_id',
+            'status',
+            'eh_agregado',
+            'itens_agregados_ids',
+            'data_lancamento',
+        ];
+
+        $values = [
             $data['descricao'],
             $data['valor'],
             $data['data_vencimento'],
-            $data['tipo'], // O 'tipo' do formulário corresponde ao 'tipo_lancamento' do banco
+            $data['tipo'],
             $data['categoria_id'],
             $data['cliente_id'] ?? null,
             $data['processo_id'] ?? null,
             $data['status'] ?? 'Pendente',
             $data['eh_agregado'] ?? 0,
             $data['itens_agregados_ids'] ?? null,
-            $data['data_lancamento'] ?? date('Y-m-d H:i:s')
-        ]);
+            $data['data_lancamento'] ?? date('Y-m-d H:i:s'),
+        ];
+
+        if (array_key_exists('userid', $data)) {
+            $columns[] = 'userid';
+            $values[] = $data['userid'];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+        $sql = 'INSERT INTO lancamentos_financeiros (' . implode(', ', $columns) . ') VALUES (' . $placeholders . ')';
+        $stmt = $this->pdo->prepare($sql);
+
+        return $stmt->execute($values);
     }
 
     public function getById($id) {
