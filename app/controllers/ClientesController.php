@@ -292,6 +292,11 @@ class ClientesController
             $errors[] = 'O nome do responsável deve ter no máximo 60 caracteres.';
         }
         $tipoPessoa = $data['tipo_pessoa'] ?? 'Jurídica';
+        $tipoServico = $data['tipo_servico'] ?? 'Assessoria';
+
+        if (!in_array($tipoServico, ['Assessoria', 'Balcão'], true)) {
+            $errors[] = 'Selecione um tipo de serviço válido.';
+        }
         $documento = DocumentValidator::sanitizeNumber((string) ($data['cpf_cnpj'] ?? ''));
 
         if ($tipoPessoa === 'Física') {
@@ -382,6 +387,13 @@ class ClientesController
         }
 
         return $errors;
+    }
+
+    private function sanitizeTipoServico(?string $tipoServico): string
+    {
+        $tipoServico = is_string($tipoServico) ? trim($tipoServico) : '';
+
+        return in_array($tipoServico, ['Assessoria', 'Balcão'], true) ? $tipoServico : 'Assessoria';
     }
 
     private function isValidCityFromApi(string $cidade, string $estado, bool $allowFallback = false): bool
@@ -490,6 +502,7 @@ class ClientesController
         $data['cpf_cnpj'] = trim((string) ($data['cpf_cnpj'] ?? ''));
         $data['endereco'] = trim((string) ($data['endereco'] ?? ''));
         $data['bairro'] = trim((string) ($data['bairro'] ?? ''));
+        $data['tipo_servico'] = $this->sanitizeTipoServico($data['tipo_servico'] ?? null);
 
         $numero = trim((string) ($data['numero'] ?? ''));
         $data['numero'] = $numero === '' ? 'N/A' : $numero;
