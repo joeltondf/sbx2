@@ -16,6 +16,17 @@ class CategoriaFinanceira
         return $this->pdo->query($sql)->fetchAll();
     }
 
+    /**
+     * Retorna apenas as categorias de despesa ativas, ordenadas por grupo principal
+     * e nome para uso no formulário de lançamento manual.
+     */
+    public function getExpenseCategories(): array {
+        $sql = "SELECT id, nome_categoria, grupo_principal FROM categorias_financeiras WHERE tipo_lancamento = 'DESPESA' AND ativo = 1 ORDER BY grupo_principal, nome_categoria";
+        $stmt = $this->pdo->query($sql);
+
+        return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    }
+
     public function getById($id) {
         $stmt = $this->pdo->prepare("SELECT * FROM categorias_financeiras WHERE id = ?");
         $stmt->execute([$id]);
