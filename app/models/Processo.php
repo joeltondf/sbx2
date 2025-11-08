@@ -296,8 +296,8 @@ public function create($data, $files)
     public function getById($id)
     {
         // A correção está na consulta SQL abaixo, que agora inclui um JOIN com a tabela 'users'.
-        $sql = "SELECT
-                    p.*,
+        $sql = "SELECT 
+                    p.*, 
                     c.nome_cliente, 
                     u_vendedor.nome_completo as nome_vendedor, -- Pega o nome da tabela 'users'
                     t.nome_tradutor 
@@ -325,33 +325,6 @@ public function create($data, $files)
             'processo' => $processo,
             'documentos' => $documentos
         ];
-    }
-
-    public function getForRevenueLaunch(int $processId): ?array
-    {
-        $sql = 'SELECT id, titulo, status_processo, valor_total, cliente_id, lancado_financeiramente FROM processos WHERE id = ?';
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$processId]);
-        $data = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $data ?: null;
-    }
-
-    public function markRevenueLaunch(int $processId): bool
-    {
-        $sql = 'UPDATE processos SET lancado_financeiramente = 1, data_lancamento_receita = NOW() WHERE id = :id AND (lancado_financeiramente = 0 OR lancado_financeiramente IS NULL)';
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([':id' => $processId]);
-
-        if ($stmt->rowCount() > 0) {
-            return true;
-        }
-
-        $stmtVerify = $this->pdo->prepare('SELECT lancado_financeiramente FROM processos WHERE id = ?');
-        $stmtVerify->execute([$processId]);
-        $alreadyLaunched = (int)$stmtVerify->fetchColumn();
-
-        return $alreadyLaunched === 1;
     }
 
 

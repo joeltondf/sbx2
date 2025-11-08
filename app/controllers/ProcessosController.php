@@ -45,9 +45,6 @@ class ProcessosController
     private $omieService;
     private $notificacaoModel;
     private $emailService;
-    private $categoriaFinanceiraModel;
-    private $lancamentoFinanceiroModel;
-    private ?int $defaultRevenueCategoryId = null;
     private ?int $defaultVendorIdCache = null;
     private bool $defaultVendorResolved = false;
 
@@ -69,8 +66,6 @@ class ProcessosController
         $this->omieService = new OmieService($this->configModel, $pdo);
         $this->notificacaoModel = new Notificacao($pdo);
         $this->emailService = new EmailService($pdo);
-        $this->categoriaFinanceiraModel = new CategoriaFinanceira($pdo);
-        $this->lancamentoFinanceiroModel = new LancamentoFinanceiro($pdo);
 
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -1128,116 +1123,6 @@ class ProcessosController
                 break;
             default:
                 break;
-        }
-
-        if ($newStatusNormalized === 'concluído') {
-            $this->attemptAutomaticRevenueLaunch($processId);
-        }
-    }
-
-    private function attemptAutomaticRevenueLaunch(int $processId): void
-    {
-        try {
-            $processData = $this->processoModel->getForRevenueLaunch($processId);
-            if (!$processData) {
-                return;
-            }
-
-            $currentStatus = $this->normalizeStatusName($processData['status_processo'] ?? '');
-            if ($currentStatus !== 'concluído') {
-                return;
-            }
-
-            if ((int)($processData['lancado_financeiramente'] ?? 0) === 1) {
-                return;
-            }
-
-            $valorTotal = (float)($processData['valor_total'] ?? 0);
-            if ($valorTotal <= 0) {
-                return;
-            }
-
-            $categoriaId = $this->resolveDefaultRevenueCategoryId();
-            if (!$categoriaId) {
-                throw new RuntimeException('Categoria de receita padrão não disponível.');
-            }
-
-            $descricaoBase = trim((string)($processData['titulo'] ?? ''));
-            $descricao = $descricaoBase !== ''
-                ? 'Receita do serviço: ' . $descricaoBase
-                : 'Receita do serviço #' . $processId;
-
-            $payload = [
-                'descricao' => $descricao,
-                'valor' => number_format($valorTotal, 2, '.', ''),
-                'data_vencimento' => date('Y-m-d'),
-                'tipo' => 'RECEITA',
-                'categoria_id' => $categoriaId,
-                'cliente_id' => $processData['cliente_id'] ?? null,
-                'processo_id' => $processId,
-                'status' => 'PAGO',
-                'eh_agregado' => 0,
-                'itens_agregados_ids' => null,
-                'data_lancamento' => date('Y-m-d H:i:s'),
-            ];
-
-            if (isset($_SESSION['user_id'])) {
-                $payload['userid'] = (int)$_SESSION['user_id'];
-            }
-
-            $this->pdo->beginTransaction();
-
-            if (!$this->lancamentoFinanceiroModel->create($payload)) {
-                throw new RuntimeException('Falha ao registrar o lançamento financeiro.');
-            }
-
-            if (!$this->processoModel->markRevenueLaunch($processId)) {
-                throw new RuntimeException('Não foi possível marcar o processo como lançado financeiramente.');
-            }
-
-            $this->pdo->commit();
-        } catch (Throwable $exception) {
-            if ($this->pdo->inTransaction()) {
-                $this->pdo->rollBack();
-            }
-            error_log('Erro ao lançar receita automática para o processo #' . $processId . ': ' . $exception->getMessage());
-        }
-    }
-
-    private function resolveDefaultRevenueCategoryId(): ?int
-    {
-        if ($this->defaultRevenueCategoryId !== null) {
-            return $this->defaultRevenueCategoryId;
-        }
-
-        try {
-            $stmt = $this->pdo->prepare(
-                "SELECT id FROM categorias_financeiras WHERE tipo_lancamento = 'RECEITA' AND eh_produto_orcamento = 1 AND ativo = 1 ORDER BY id ASC LIMIT 1"
-            );
-            $stmt->execute();
-            $categoryId = $stmt->fetchColumn();
-
-            if ($categoryId) {
-                $this->defaultRevenueCategoryId = (int)$categoryId;
-                return $this->defaultRevenueCategoryId;
-            }
-
-            $insert = $this->pdo->prepare(
-                "INSERT INTO categorias_financeiras (nome_categoria, tipo_lancamento, grupo_principal, valor_padrao, servico_tipo, bloquear_valor_minimo, eh_produto_orcamento, ativo)
-                 VALUES (:nome, 'RECEITA', :grupo, NULL, :servico, 0, 1, 1)"
-            );
-
-            $insert->execute([
-                ':nome' => 'Receita de Serviços',
-                ':grupo' => 'Serviços',
-                ':servico' => CategoriaFinanceira::DEFAULT_SERVICE_TYPE,
-            ]);
-
-            $this->defaultRevenueCategoryId = (int)$this->pdo->lastInsertId();
-            return $this->defaultRevenueCategoryId;
-        } catch (Throwable $exception) {
-            error_log('Erro ao garantir categoria de receita padrão: ' . $exception->getMessage());
-            return null;
         }
     }
 
