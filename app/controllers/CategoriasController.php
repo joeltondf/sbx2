@@ -34,7 +34,7 @@ class CategoriasController {
         $show_inactive = isset($_GET['show_inactive']) && $_GET['show_inactive'] == '1';
         $categorias = $this->categoriaModel->getCategoriasFinanceiras($show_inactive);
         $grupos_principais = $this->categoriaModel->getGruposPrincipais();
-        $pageTitle = "Gerenciar Grupos de Despesas";
+        $pageTitle = "Gerenciar Grupos Financeiros";
         
         $this->render('categorias/index', [
             'categorias' => $categorias,
@@ -58,14 +58,7 @@ class CategoriasController {
     public function store() {
         $this->auth_check();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $data = $this->prepareDespesaData($_POST);
-
-            if ($data['grupo_principal'] === '') {
-                $this->redirectWithMessage(false, '', 'Informe o grupo principal da despesa.');
-                return;
-            }
-
-            $success = $this->categoriaModel->create($data);
+            $success = $this->categoriaModel->create($_POST);
             $this->redirectWithMessage($success, 'Categoria criada com sucesso!', 'Erro ao criar a categoria.');
         }
     }
@@ -73,14 +66,7 @@ class CategoriasController {
     public function update($id) {
         $this->auth_check();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $data = $this->prepareDespesaData($_POST);
-
-            if ($data['grupo_principal'] === '') {
-                $this->redirectWithMessage(false, '', 'Informe o grupo principal da despesa.');
-                return;
-            }
-
-            $success = $this->categoriaModel->update($id, $data);
+            $success = $this->categoriaModel->update($id, $_POST);
             $this->redirectWithMessage($success, 'Categoria atualizada com sucesso!', 'Erro ao atualizar a categoria.');
         }
     }
@@ -154,18 +140,6 @@ class CategoriasController {
     private function sanitizeGroupName(string $value): string {
         return trim(strip_tags($value));
 
-    }
-
-    private function prepareDespesaData(array $input): array {
-        $data = $input;
-
-        $data['nome_categoria'] = trim((string)($data['nome_categoria'] ?? ''));
-        $data['grupo_principal'] = trim((string)($data['grupo_principal'] ?? ''));
-        $data['ativo'] = isset($data['ativo']) && (string)$data['ativo'] === '0' ? 0 : 1;
-        $data['tipo_lancamento'] = 'DESPESA';
-        $data['eh_produto_orcamento'] = 0;
-
-        return $data;
     }
     
     // Método para desativar (muda ativo para 0)
