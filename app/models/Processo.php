@@ -476,7 +476,7 @@ public function create($data, $files)
                                 'categoria_id' => $categoriaFinanceira['id'],
                                 'cliente_id' => $processoCompleto['cliente_id'],
                                 'processo_id' => $id,
-                                'status_pagamento' => 'PENDENTE'
+                                'status' => 'Pendente'
                             ];
                             $lancamentoModel->create($dadosLancamento);
                         }
@@ -500,7 +500,7 @@ public function create($data, $files)
                         'categoria_id' => $categoriaAgregada ? $categoriaAgregada['id'] : null,
                         'cliente_id' => $processoCompleto['cliente_id'],
                         'processo_id' => $id,
-                        'status_pagamento' => 'PENDENTE',
+                        'status' => 'Pendente',
                         'eh_agregado' => 1,
                         'itens_agregados_ids' => json_encode($idsDocumentos)
                     ];
