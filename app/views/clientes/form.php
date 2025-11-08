@@ -80,6 +80,10 @@ $estado = $formValues['estado'] ?? '';
 $endereco = $formValues['endereco'] ?? '';
 $cep = $formValues['cep'] ?? '';
 $tipo_assessoria = $formValues['tipo_assessoria'] ?? '';
+$tipo_servico = $formValues['tipo_servico'] ?? 'Assessoria';
+if (!in_array($tipo_servico, ['Assessoria', 'Balcão'], true)) {
+    $tipo_servico = 'Assessoria';
+}
 $tipo_pessoa = $formValues['tipo_pessoa'] ?? 'Jurídica';
 $criar_login = !empty($formValues['criar_login']);
 $login_email = $formValues['login_email'] ?? '';
@@ -186,16 +190,33 @@ require_once __DIR__ . '/../layouts/header.php';
     <?php endif; ?>
 
     <div class="mb-6">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">Tipo de Cliente</label>
-        <div class="flex items-center space-x-6">
-            <label class="flex items-center cursor-pointer">
-                <input type="radio" name="tipo_pessoa" value="Jurídica" class="h-4 w-4 text-blue-600 border-gray-300"  <?php echo ($tipo_pessoa === 'Jurídica') ? 'checked' : ''; ?>>
-                <span class="ml-2 text-sm text-gray-700">Pessoa Jurídica</span>
-            </label>
-            <label class="flex items-center cursor-pointer">
-                <input type="radio" name="tipo_pessoa" value="Física" class="h-4 w-4 text-blue-600 border-gray-300" <?php echo ($tipo_pessoa === 'Física') ? 'checked' : ''; ?>>
-                <span class="ml-2 text-sm text-gray-700">Pessoa Física</span>
-            </label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="border border-gray-200 rounded-lg p-4 bg-white">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Tipo de Cliente</h3>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="tipo_pessoa" value="Jurídica" id="tipo_pessoa_juridica" class="h-4 w-4 text-blue-600 border-gray-300"  <?php echo ($tipo_pessoa === 'Jurídica') ? 'checked' : ''; ?>>
+                        <span class="ml-2 text-sm text-gray-700">Pessoa Jurídica</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="tipo_pessoa" value="Física" id="tipo_pessoa_fisica" class="h-4 w-4 text-blue-600 border-gray-300" <?php echo ($tipo_pessoa === 'Física') ? 'checked' : ''; ?>>
+                        <span class="ml-2 text-sm text-gray-700">Pessoa Física</span>
+                    </label>
+                </div>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4 bg-white">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Tipo de Serviço</h3>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="tipo_servico" value="Assessoria" id="tipo_servico_assessoria" class="h-4 w-4 text-blue-600 border-gray-300" <?php echo ($tipo_servico === 'Assessoria') ? 'checked' : ''; ?>>
+                        <span class="ml-2 text-sm text-gray-700">Assessoria</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio" name="tipo_servico" value="Balcão" id="tipo_servico_balcao" class="h-4 w-4 text-blue-600 border-gray-300" <?php echo ($tipo_servico === 'Balcão') ? 'checked' : ''; ?>>
+                        <span class="ml-2 text-sm text-gray-700">Balcão</span>
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
     <div class="space-y-6">
