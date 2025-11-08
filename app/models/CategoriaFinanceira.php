@@ -23,34 +23,44 @@ class CategoriaFinanceira
     }
 
     public function create($data) {
-        $sql = "INSERT INTO categorias_financeiras (nome_categoria, tipo_lancamento, grupo_principal, valor_padrao, servico_tipo, bloquear_valor_minimo) VALUES (?, ?, ?, ?, ?, ?)";
+        $nome = trim((string)($data['nome_categoria'] ?? ''));
+        $grupo = trim((string)($data['grupo_principal'] ?? ''));
+
+        if ($nome === '' || $grupo === '') {
+            return false;
+        }
+
+        $ativo = isset($data['ativo']) && (int)$data['ativo'] === 0 ? 0 : 1;
+
+        $sql = "INSERT INTO categorias_financeiras (nome_categoria, tipo_lancamento, grupo_principal, valor_padrao, servico_tipo, bloquear_valor_minimo, eh_produto_orcamento, ativo) VALUES (?, 'DESPESA', ?, NULL, ?, 0, 0, ?)";
         $stmt = $this->pdo->prepare($sql);
+
         return $stmt->execute([
-            $data['nome_categoria'], 
-            $data['tipo_lancamento'], 
-            $data['grupo_principal'],
-            ($data['tipo_lancamento'] === 'RECEITA') ? ($data['valor_padrao'] ?? null) : null,
-            ($data['tipo_lancamento'] === 'RECEITA')
-                ? $this->normalizeServiceType($data['servico_tipo'] ?? null)
-                : self::DEFAULT_SERVICE_TYPE,
-            ($data['tipo_lancamento'] === 'RECEITA') ? (isset($data['bloquear_valor_minimo']) ? 1 : 0) : 0
+            $nome,
+            $grupo,
+            self::DEFAULT_SERVICE_TYPE,
+            $ativo
         ]);
     }
 
     public function update($id, $data) {
-        $sql = "UPDATE categorias_financeiras SET nome_categoria = ?, tipo_lancamento = ?, grupo_principal = ?, ativo = ?, valor_padrao = ?, servico_tipo = ?, bloquear_valor_minimo = ?, eh_produto_orcamento = ? WHERE id = ?";
+        $nome = trim((string)($data['nome_categoria'] ?? ''));
+        $grupo = trim((string)($data['grupo_principal'] ?? ''));
+
+        if ($nome === '' || $grupo === '') {
+            return false;
+        }
+
+        $ativo = isset($data['ativo']) && (int)$data['ativo'] === 0 ? 0 : 1;
+
+        $sql = "UPDATE categorias_financeiras SET nome_categoria = ?, tipo_lancamento = 'DESPESA', grupo_principal = ?, ativo = ?, valor_padrao = NULL, servico_tipo = ?, bloquear_valor_minimo = 0, eh_produto_orcamento = 0 WHERE id = ?";
         $stmt = $this->pdo->prepare($sql);
+
         return $stmt->execute([
-            $data['nome_categoria'],
-            $data['tipo_lancamento'],
-            $data['grupo_principal'],
-            $data['ativo'],
-            ($data['tipo_lancamento'] === 'RECEITA') ? ($data['valor_padrao'] ?? null) : null,
-            ($data['tipo_lancamento'] === 'RECEITA')
-                ? $this->normalizeServiceType($data['servico_tipo'] ?? null)
-                : self::DEFAULT_SERVICE_TYPE,
-            ($data['tipo_lancamento'] === 'RECEITA') ? (isset($data['bloquear_valor_minimo']) ? 1 : 0) : 0,
-            ($data['tipo_lancamento'] === 'RECEITA') ? (isset($data['eh_produto_orcamento']) ? 1 : 0) : 0, // Adicionado
+            $nome,
+            $grupo,
+            $ativo,
+            self::DEFAULT_SERVICE_TYPE,
             $id
         ]);
     }
@@ -76,7 +86,7 @@ class CategoriaFinanceira
     }
 
     public function getGruposPrincipais() {
-        $sql = "SELECT DISTINCT grupo_principal FROM categorias_financeiras WHERE ativo = 1 ORDER BY grupo_principal ASC";
+        $sql = "SELECT DISTINCT grupo_principal FROM categorias_financeiras WHERE ativo = 1 AND tipo_lancamento = 'DESPESA' AND eh_produto_orcamento = 0 ORDER BY grupo_principal ASC";
         return $this->pdo->query($sql)->fetchAll(PDO::FETCH_COLUMN);
     }
 
@@ -237,12 +247,12 @@ class CategoriaFinanceira
         ]);
     }
     public function getCategoriasFinanceiras($show_inactive = false) {
-        $sql = "SELECT * FROM categorias_financeiras WHERE eh_produto_orcamento = 0";
+        $sql = "SELECT * FROM categorias_financeiras WHERE tipo_lancamento = 'DESPESA' AND eh_produto_orcamento = 0";
         if (!$show_inactive) {
             $sql .= " AND ativo = 1";
         }
         $sql .= " ORDER BY grupo_principal, nome_categoria";
-        
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
