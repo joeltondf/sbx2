@@ -352,9 +352,39 @@ class Cliente
      *
      * @return array Lista de clientes com is_prospect = 0.
      */
-    public function getAppClients(): array
+    public function getAppClients(array $filters = []): array
     {
-        return $this->getAll();
+        $whereClauses = ['is_prospect = 0'];
+        $params = [];
+
+        $nome = trim((string) ($filters['busca_nome'] ?? ''));
+        if ($nome !== '') {
+            $whereClauses[] = 'nome_cliente LIKE :nome';
+            $params[':nome'] = '%' . $nome . '%';
+        }
+
+        $tipoPessoa = $filters['tipo_pessoa'] ?? '';
+        if ($tipoPessoa !== '') {
+            $whereClauses[] = 'tipo_pessoa = :tipo_pessoa';
+            $params[':tipo_pessoa'] = $tipoPessoa;
+        }
+
+        $tipoServico = $filters['tipo_servico'] ?? '';
+        if ($tipoServico !== '') {
+            $whereClauses[] = 'tipo_servico = :tipo_servico';
+            $params[':tipo_servico'] = $tipoServico;
+        }
+
+        $sql = 'SELECT * FROM clientes';
+        if (!empty($whereClauses)) {
+            $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
+        }
+        $sql .= ' ORDER BY nome_cliente ASC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
