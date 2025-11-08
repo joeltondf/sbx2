@@ -129,7 +129,7 @@ $sql = "SELECT
         FROM prospeccoes p
         LEFT JOIN clientes c ON p.cliente_id = c.id
         LEFT JOIN users u ON p.responsavel_id = u.id
-        LEFT JOIN distribuicaoleads d ON p.id = d.prospeccaoId
+        LEFT JOIN distribuicao_leads d ON p.id = d.prospeccaoId
         LEFT JOIN users sdr ON d.sdrId = sdr.id
         LEFT JOIN users vendedor ON d.vendedorId = vendedor.id
         $sql_where
