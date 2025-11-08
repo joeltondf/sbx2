@@ -40,7 +40,8 @@ class ClientesController
     public function index()
     {
         $pageTitle = "Gestão de Clientes";
-        $clientes = $this->clienteModel->getAppClients();
+        $filters = $this->getIndexFilters();
+        $clientes = $this->clienteModel->getAppClients($filters);
         require __DIR__ . '/../views/layouts/header.php';
         require __DIR__ . '/../views/clientes/lista.php';
         require __DIR__ . '/../views/layouts/footer.php';
@@ -440,6 +441,33 @@ class ClientesController
         $tipoServico = is_string($tipoServico) ? trim($tipoServico) : '';
 
         return in_array($tipoServico, ['Assessoria', 'Balcão'], true) ? $tipoServico : 'Assessoria';
+    }
+
+    private function sanitizeTipoServicoFilter($tipoServico): string
+    {
+        $tipoServico = is_string($tipoServico) ? trim($tipoServico) : '';
+
+        return in_array($tipoServico, ['Assessoria', 'Balcão'], true) ? $tipoServico : '';
+    }
+
+    private function sanitizeTipoPessoaFilter($tipoPessoa): string
+    {
+        $tipoPessoa = is_string($tipoPessoa) ? trim($tipoPessoa) : '';
+
+        return in_array($tipoPessoa, ['Física', 'Jurídica'], true) ? $tipoPessoa : '';
+    }
+
+    private function getIndexFilters(): array
+    {
+        $nome = isset($_GET['busca_nome']) ? trim((string) $_GET['busca_nome']) : '';
+        $tipoPessoa = $this->sanitizeTipoPessoaFilter($_GET['tipo_pessoa'] ?? '');
+        $tipoServico = $this->sanitizeTipoServicoFilter($_GET['tipo_servico'] ?? '');
+
+        return [
+            'busca_nome' => $nome,
+            'tipo_pessoa' => $tipoPessoa,
+            'tipo_servico' => $tipoServico,
+        ];
     }
 
     private function isValidCityFromApi(string $cidade, string $estado, bool $allowFallback = false): bool
