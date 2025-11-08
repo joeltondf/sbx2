@@ -12,6 +12,8 @@ class LancamentoFinanceiro {
         // O nome da coluna no INSERT está 'tipo', mas no banco é 'tipo_lancamento'. Vamos corrigir isso.
         $sql = "INSERT INTO lancamentos_financeiros (descricao, valor, data_vencimento, tipo_lancamento, categoria_id, cliente_id, processo_id, status, eh_agregado, itens_agregados_ids, data_lancamento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $this->pdo->prepare($sql);
+        $status = strtoupper($data['status_pagamento'] ?? $data['status'] ?? 'PENDENTE');
+
         return $stmt->execute([
             $data['descricao'],
             $data['valor'],
@@ -20,10 +22,64 @@ class LancamentoFinanceiro {
             $data['categoria_id'],
             $data['cliente_id'] ?? null,
             $data['processo_id'] ?? null,
-            $data['status'] ?? 'Pendente',
+            $status,
             $data['eh_agregado'] ?? 0,
             $data['itens_agregados_ids'] ?? null,
             $data['data_lancamento'] ?? date('Y-m-d H:i:s')
+        ]);
+    }
+
+    /**
+     * Cria uma despesa manual com os campos adicionais exigidos pelo fluxo de caixa.
+     */
+    public function createManualExpense(array $data): bool
+    {
+        $sql = "INSERT INTO lancamentos_financeiros (
+                    categoria_id,
+                    descricao,
+                    valor,
+                    data_lancamento,
+                    data_vencimento,
+                    tipo_lancamento,
+                    status,
+                    metodo_pagamento,
+                    comprovante_url,
+                    processo_id,
+                    eh_agregado,
+                    itens_agregados_ids,
+                    userid
+                ) VALUES (
+                    :categoria_id,
+                    :descricao,
+                    :valor,
+                    :data_lancamento,
+                    :data_vencimento,
+                    'DESPESA',
+                    :status,
+                    :metodo_pagamento,
+                    :comprovante_url,
+                    NULL,
+                    0,
+                    NULL,
+                    :userid
+                )";
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $valorNormalizado = is_string($data['valor'])
+            ? str_replace(['.', ','], ['', '.'], preg_replace('/[^0-9,.-]/', '', $data['valor']))
+            : $data['valor'];
+
+        return $stmt->execute([
+            ':categoria_id' => $data['categoria_id'],
+            ':descricao' => $data['descricao'],
+            ':valor' => number_format((float) $valorNormalizado, 2, '.', ''),
+            ':data_lancamento' => $data['data_lancamento'] ?? date('Y-m-d'),
+            ':data_vencimento' => $data['data_vencimento'] ?? null,
+            ':status' => strtoupper($data['status_pagamento'] ?? 'PENDENTE'),
+            ':metodo_pagamento' => $data['metodo_pagamento'] ?? null,
+            ':comprovante_url' => $data['comprovante_url'] ?? null,
+            ':userid' => $data['userid'] ?? null,
         ]);
     }
 

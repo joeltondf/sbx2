@@ -62,39 +62,34 @@
     </div>
     
 <div class="bg-white p-8 rounded-md shadow-lg border border-gray-200 mb-8">
-    <h3 id="form-title" class="text-2xl font-bold text-gray-800 mb-6 border-b-2 border-gray-100 pb-5">Adicionar Novo Lançamento 💰</h3>
-    <form id="lancamento-form" action="fluxo_caixa.php?action=store" method="POST" class="space-y-6">
+    <div class="mb-6 border-b-2 border-gray-100 pb-5">
+        <h3 id="form-title" class="text-2xl font-bold text-gray-800">Adicionar Nova Despesa</h3>
+        <p class="text-sm text-gray-600 mt-2">Lançamento manual de despesas. Receitas são geradas automaticamente ao finalizar serviços.</p>
+    </div>
+    <form id="lancamento-form" action="fluxo_caixa.php?action=store" method="POST" enctype="multipart/form-data" class="space-y-6">
         <input type="hidden" name="id" id="lancamento_id">
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div class="md:col-span-2">
-                <label for="categoria_id" class="block text-sm font-semibold text-gray-700 mb-2">Grupo / Descrição</label>
+                <label for="categoria_id" class="block text-sm font-semibold text-gray-700 mb-2">Categoria da Despesa</label>
                 <div class="relative">
                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
                         <i class="fas fa-tags"></i>
                     </div>
                     <select name="categoria_id" id="categoria_id" required class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 transition-colors duration-200 border border-gray-300">
-                        <option value="">Selecione para ver o tipo...</option>
+                        <option value="">Selecione a categoria...</option>
                         <?php
                         $grouped_categorias = [];
                         foreach ($categorias as $cat) {
-                            $grouped_categorias[$cat['grupo_principal']][] = $cat;
+                            $grupo = $cat['grupo_principal'] ?: 'Outros';
+                            $grouped_categorias[$grupo][] = $cat;
                         }
                         foreach ($grouped_categorias as $grupo => $items):
                         ?>
                             <optgroup label="<?php echo htmlspecialchars($grupo); ?>">
                                 <?php foreach ($items as $item): ?>
-                                    <?php
-                                    // *** Alteração importante ***
-                                    // Verifica se a categoria é de serviço (servico_tipo diferente de 'Nenhum').
-                                    // Se for, pula a exibição para evitar lançamentos de serviço nesta tela.
-                                    if ($item['servico_tipo'] !== 'Nenhum') {
-                                        continue;
-                                    }
-                                    $textColorClass = $item['tipo_lancamento'] === 'RECEITA' ? 'text-green-600' : 'text-red-600';
-                                    ?>
-                                    <option value="<?php echo $item['id']; ?>" class="<?php echo $textColorClass; ?> font-medium">
-                                        <?php echo htmlspecialchars($item['nome_categoria']); ?> (<?php echo $item['tipo_lancamento']; ?>)
+                                    <option value="<?php echo $item['id']; ?>">
+                                        <?php echo htmlspecialchars($item['nome_categoria']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </optgroup>
@@ -103,8 +98,7 @@
                 </div>
             </div>
 
-            <!-- resto do formulário continua inalterado -->
-            <div>
+            <div class="md:col-span-1">
                 <label for="valor" class="block text-sm font-semibold text-gray-700 mb-2">Valor</label>
                 <div class="relative rounded-md shadow-sm">
                     <input
@@ -122,7 +116,7 @@
                 </div>
             </div>
 
-            <div>
+            <div class="md:col-span-1">
                 <label for="data_lancamento" class="block text-sm font-semibold text-gray-700 mb-2">Data do Lançamento</label>
                 <div class="relative">
                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
@@ -131,10 +125,20 @@
                     <input type="date" name="data_lancamento" id="data_lancamento" required value="<?php echo date('Y-m-d'); ?>" class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 border border-gray-300">
                 </div>
             </div>
+
+            <div class="md:col-span-1">
+                <label for="data_vencimento" class="block text-sm font-semibold text-gray-700 mb-2">Data de Vencimento</label>
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <input type="date" name="data_vencimento" id="data_vencimento" class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 border border-gray-300">
+                </div>
+            </div>
         </div>
 
         <div>
-            <label for="descricao" class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
+            <label for="descricao" class="block text-sm font-semibold text-gray-700 mb-2">Descrição</label>
             <div class="relative">
                 <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
                     <i class="fas fa-pencil-alt"></i>
@@ -143,10 +147,46 @@
             </div>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <label for="status_pagamento" class="block text-sm font-semibold text-gray-700 mb-2">Status do Pagamento</label>
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <select name="status_pagamento" id="status_pagamento" class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 border border-gray-300">
+                        <option value="PENDENTE" selected>Pendente</option>
+                        <option value="PAGO">Pago</option>
+                        <option value="VENCIDO">Vencido</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label for="metodo_pagamento" class="block text-sm font-semibold text-gray-700 mb-2">Método de Pagamento</label>
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                        <i class="fas fa-credit-card"></i>
+                    </div>
+                    <input type="text" name="metodo_pagamento" id="metodo_pagamento" class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 border border-gray-300" placeholder="Ex: Cartão, Pix, Transferência">
+                </div>
+            </div>
+
+            <div>
+                <label for="comprovante" class="block text-sm font-semibold text-gray-700 mb-2">Comprovante (opcional)</label>
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+                        <i class="fas fa-paperclip"></i>
+                    </div>
+                    <input type="file" name="comprovante" id="comprovante" class="block w-full rounded-md border-gray-300 pl-12 pr-4 shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-3 border border-gray-300" accept=".pdf,.jpg,.jpeg,.png,.gif">
+                </div>
+            </div>
+        </div>
+
         <div class="text-right mt-8 border-t border-gray-100 pt-6">
             <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105">
                 <i class="fas fa-check mr-2"></i>
-                Salvar Lançamento
+                Salvar Despesa
             </button>
         </div>
     </form>
@@ -278,14 +318,24 @@
         const submitButton = form.querySelector('button[type="submit"]');
 
         // Muda o título e a ação do formulário
-        title.textContent = 'Editar Lançamento';
+        title.textContent = 'Editar Despesa';
         form.action = 'fluxo_caixa.php?action=update';
-        
+
         // Preenche os campos do formulário
         idInput.value = lancamento.id;
         document.getElementById('categoria_id').value = lancamento.categoria_id;
         document.getElementById('descricao').value = lancamento.descricao;
         document.getElementById('data_lancamento').value = lancamento.data_lancamento;
+        if (document.getElementById('data_vencimento')) {
+            document.getElementById('data_vencimento').value = lancamento.data_vencimento ?? '';
+        }
+        if (document.getElementById('status_pagamento')) {
+            const statusField = lancamento.status_pagamento ?? lancamento.status ?? 'PENDENTE';
+            document.getElementById('status_pagamento').value = statusField;
+        }
+        if (document.getElementById('metodo_pagamento')) {
+            document.getElementById('metodo_pagamento').value = lancamento.metodo_pagamento ?? '';
+        }
 
         // Formata e preenche o valor
         const valorInput = document.getElementById('valor');

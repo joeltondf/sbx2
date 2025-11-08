@@ -119,12 +119,12 @@ class VendasController {
                 $dadosLancamento = [
                     'descricao' => $item['descricao'],
                     'valor' => $item['valor'],
-                    'data_vencimento' => date('Y-m-d'), 
+                    'data_vencimento' => date('Y-m-d'),
                     'tipo' => 'RECEITA',
                     'categoria_id' => $item['categoria_id'],
                     'cliente_id' => $venda['cliente_id'],
                     'processo_id' => $processo_id,
-                    'status' => 'Pendente'
+                    'status_pagamento' => 'PENDENTE'
                 ];
                 $lancamentoFinanceiroModel->create($dadosLancamento);
             }
@@ -147,7 +147,7 @@ class VendasController {
                 'categoria_id' => $categoriaAgregada ? $categoriaAgregada['id'] : null, // Usa a categoria encontrada
                 'cliente_id' => $venda['cliente_id'],
                 'processo_id' => $processo_id,
-                'status' => 'Pendente',
+                'status_pagamento' => 'PENDENTE',
                 'eh_agregado' => 1, // Novo campo para identificar
                 'itens_agregados_ids' => json_encode($idsProdutosAgregados[$tipoServico]) // Salva os IDs dos itens originais
             ];

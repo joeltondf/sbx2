@@ -57,7 +57,7 @@ public function index() {
 
     $lancamentos = $this->lancamentoFinanceiroModel->getAllPaginated($page, 20, $search, $filters);
     $totalLancamentos = $this->lancamentoFinanceiroModel->countAll($search, $filters);
-    $categorias = $this->categoriaModel->getAll();
+    $categorias = $this->categoriaModel->getExpenseCategories();
 
     // --- CORREÇÃO: Lógica para buscar os totais ---
     $totals = $this->lancamentoFinanceiroModel->getTotals($search, $filters);
@@ -90,6 +90,102 @@ public function index() {
         'resultado' => $resultado
     ]);
 }
+
+    /**
+     * Persiste uma despesa manual registrada pelo formulário da tela.
+     */
+    public function store(): void
+    {
+        $this->auth_check();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: /fluxo_caixa.php');
+            exit();
+        }
+
+        $categoriaId = isset($_POST['categoria_id']) ? (int) $_POST['categoria_id'] : null;
+        $descricao = trim($_POST['descricao'] ?? '');
+        $valorBruto = $_POST['valor'] ?? '';
+        $dataLancamento = $_POST['data_lancamento'] ?? date('Y-m-d');
+        $dataVencimento = $_POST['data_vencimento'] ?? null;
+        $statusPagamento = strtoupper($_POST['status_pagamento'] ?? 'PENDENTE');
+        $metodoPagamento = trim($_POST['metodo_pagamento'] ?? '');
+        $metodoPagamento = $metodoPagamento !== '' ? $metodoPagamento : null;
+
+        $allowedStatus = ['PAGO', 'PENDENTE', 'VENCIDO'];
+        if (!$categoriaId || $descricao === '' || $valorBruto === '' || !in_array($statusPagamento, $allowedStatus, true)) {
+            $_SESSION['error_message'] = 'Preencha todos os campos obrigatórios da despesa manual.';
+            header('Location: /fluxo_caixa.php');
+            exit();
+        }
+
+        $valorNormalizado = is_string($valorBruto)
+            ? str_replace(['.', ','], ['', '.'], preg_replace('/[^0-9,.-]/', '', $valorBruto))
+            : $valorBruto;
+
+        $dataLancamentoValida = DateTime::createFromFormat('Y-m-d', $dataLancamento) !== false;
+        $dataVencimentoValida = !$dataVencimento || DateTime::createFromFormat('Y-m-d', $dataVencimento) !== false;
+
+        if (!$dataLancamentoValida || !$dataVencimentoValida) {
+            $_SESSION['error_message'] = 'Datas inválidas informadas para a despesa.';
+            header('Location: /fluxo_caixa.php');
+            exit();
+        }
+
+        $comprovanteUrl = null;
+        if (!empty($_FILES['comprovante']) && $_FILES['comprovante']['error'] !== UPLOAD_ERR_NO_FILE) {
+            if ($_FILES['comprovante']['error'] !== UPLOAD_ERR_OK) {
+                $_SESSION['error_message'] = 'Falha ao enviar o comprovante da despesa.';
+                header('Location: /fluxo_caixa.php');
+                exit();
+            }
+
+            $uploadDir = __DIR__ . '/../../uploads/financeiro/comprovantes/';
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0775, true)) {
+                $_SESSION['error_message'] = 'Não foi possível preparar o diretório de comprovantes.';
+                header('Location: /fluxo_caixa.php');
+                exit();
+            }
+
+            $originalName = $_FILES['comprovante']['name'] ?? 'comprovante';
+            $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+            $safeExtension = $extension ? '.' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $extension)) : '';
+            $fileName = uniqid('despesa_', true) . $safeExtension;
+            $destination = $uploadDir . $fileName;
+
+            if (!move_uploaded_file($_FILES['comprovante']['tmp_name'], $destination)) {
+                $_SESSION['error_message'] = 'Não foi possível salvar o comprovante enviado.';
+                header('Location: /fluxo_caixa.php');
+                exit();
+            }
+
+            $comprovanteUrl = 'uploads/financeiro/comprovantes/' . $fileName;
+        }
+
+        $dadosDespesa = [
+            'categoria_id' => $categoriaId,
+            'descricao' => $descricao,
+            'valor' => $valorNormalizado,
+            'data_lancamento' => $dataLancamento,
+            'data_vencimento' => $dataVencimento ?: null,
+            'status_pagamento' => $statusPagamento,
+            'metodo_pagamento' => $metodoPagamento,
+            'comprovante_url' => $comprovanteUrl,
+            'userid' => $_SESSION['user_id'] ?? null,
+        ];
+
+        if ($this->lancamentoFinanceiroModel->createManualExpense($dadosDespesa)) {
+            $_SESSION['success_message'] = 'Despesa manual registrada com sucesso!';
+        } else {
+            if ($comprovanteUrl) {
+                @unlink(__DIR__ . '/../../' . $comprovanteUrl);
+            }
+            $_SESSION['error_message'] = 'Não foi possível salvar a despesa manual.';
+        }
+
+        header('Location: /fluxo_caixa.php');
+        exit();
+    }
 
     /**
      * API para buscar detalhes de um lançamento agregado.
