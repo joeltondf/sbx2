@@ -4,18 +4,13 @@ $pageTitle = 'Produtos de Orçamento';
 ?>
 
 <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="flex items-center justify-between mb-2">
+    <div class="flex items-center justify-between mb-6">
         <h1 class="text-3xl font-bold text-gray-800">Produtos/Documentos</h1>
         <a href="fluxo_caixa.php" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md flex items-center">
             <i class="fas fa-arrow-left mr-2"></i>
             Voltar ao Fluxo de Caixa
         </a>
     </div>
-
-    <p class="mb-6 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex items-start">
-        <i class="fas fa-info-circle text-blue-500 mr-2 mt-0.5"></i>
-        <span>Produtos/serviços cadastrados aqui geram receitas automáticas quando processos são finalizados.</span>
-    </p>
 
     <?php include_once __DIR__ . '/../partials/messages.php'; ?>
 

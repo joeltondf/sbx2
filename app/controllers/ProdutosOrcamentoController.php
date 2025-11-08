@@ -110,9 +110,6 @@ class ProdutosOrcamentoController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            // Valores fixos para produtos de orçamento
-            $_POST['tipo_lancamento'] = 'RECEITA';
-            $_POST['eh_produto_orcamento'] = 1;
             $_POST['servico_tipo'] = $this->normalizeServiceType($_POST['servico_tipo'] ?? 'Nenhum');
             $_POST['ativo'] = $_POST['ativo'] ?? 1;
             $_POST['unidade'] = $_POST['unidade'] ?? 'UN';
