@@ -323,8 +323,9 @@ class ProcessosController
                 exit();
             }
             $perfilCriador = $_SESSION['user_perfil'] ?? '';
-            if ($perfilCriador === 'vendedor') {
-                $dadosProcesso['status_processo'] = 'Orçamento Pendente';
+            if (in_array($perfilCriador, ['vendedor', 'sdr'], true)) {
+                // Orçamentos criados por vendedores ou SDRs pulam a pendência e não notificam a gerência.
+                $dadosProcesso['status_processo'] = 'Orçamento';
             }
             $novo_id = $this->processoModel->create($dadosProcesso, $_FILES);
             $redirectUrl = 'dashboard.php';
@@ -344,7 +345,7 @@ class ProcessosController
                 } elseif ($status_inicial === 'Orçamento Pendente') {
                     $mensagemSucesso = 'Orçamento cadastrado e enviado para aprovação da gerência.';
                     $clienteIdNotificacao = (int)($dadosProcesso['cliente_id'] ?? 0);
-                    if ($clienteIdNotificacao > 0 && isset($_SESSION['user_id'])) {
+                    if ($clienteIdNotificacao > 0 && isset($_SESSION['user_id']) && $status_inicial === 'Orçamento Pendente') {
                         $this->queueManagementNotification($novo_id, $clienteIdNotificacao, (int)$_SESSION['user_id'], 'orcamento');
                     }
                 }
