@@ -33,6 +33,12 @@ class ProcessosController
     private const SESSION_KEY_PROCESS_FORM = 'process_form_data';
     private const SESSION_KEY_SERVICO_FORM = 'servico_rapido_form_data';
     private const SESSION_KEY_CLIENT_FORM = 'cliente_form_data';
+    /**
+     * Identificador do usuário institucional da empresa (Vetta).
+     * Este registro permanece no sistema apenas como representante jurídico e não deve assumir fluxos regulares de vendas.
+     */
+    private const COMPANY_VENDOR_ID = 17;
+    private const MISSING_VENDOR_MESSAGE = 'Selecione um vendedor responsável antes de enviar o orçamento.';
 
     private $pdo;
     private $processoModel;
@@ -279,6 +285,13 @@ class ProcessosController
             $dadosProcesso = $this->ensureDefaultVendor($_POST);
             $dadosProcesso = $this->prepareOmieSelectionData($dadosProcesso);
             $dadosProcesso = $this->applyPaymentDefaults($dadosProcesso);
+            if ($this->shouldRequireVendorSelection($dadosProcesso)) {
+                $_SESSION['error_message'] = self::MISSING_VENDOR_MESSAGE;
+                $this->rememberFormInput(self::SESSION_KEY_PROCESS_FORM, $dadosProcesso);
+                $redirectUrl = $this->buildProcessCreateRedirectUrl($dadosProcesso['return_to'] ?? null);
+                header('Location: ' . $redirectUrl);
+                exit();
+            }
             $perfilCriador = $_SESSION['user_perfil'] ?? '';
             if ($perfilCriador === 'vendedor') {
                 $dadosProcesso['status_processo'] = 'Orçamento Pendente';
@@ -363,6 +376,13 @@ class ProcessosController
                     $_SESSION['success_message'] = $_SESSION['message'];
                 }
             }
+        }
+
+        if ($this->shouldRequireVendorSelection($dadosParaAtualizar, $processoOriginal)) {
+            $_SESSION['error_message'] = self::MISSING_VENDOR_MESSAGE;
+            $this->rememberFormInput(self::SESSION_KEY_PROCESS_FORM, $dadosParaAtualizar);
+            header('Location: processos.php?action=edit&id=' . $id_existente);
+            exit();
         }
 
         $previousStatusNormalized = $this->normalizeStatusName($processoOriginal['status_processo'] ?? '');
@@ -715,6 +735,14 @@ class ProcessosController
 
         if (!$this->canUpdateStatus($processo, $novoStatus)) {
             $_SESSION['error_message'] = 'Você não tem permissão para executar esta ação.';
+            header('Location: processos.php?action=view&id=' . $processoId);
+            exit();
+        }
+
+        $statusPayload = $_POST;
+        $statusPayload['status_processo'] = $novoStatus;
+        if ($this->shouldRequireVendorSelection($statusPayload, $processo)) {
+            $_SESSION['error_message'] = self::MISSING_VENDOR_MESSAGE;
             header('Location: processos.php?action=view&id=' . $processoId);
             exit();
         }
@@ -1489,6 +1517,17 @@ class ProcessosController
     private function queueBudgetEmails(int $processId, ?int $userId): void
     {
         if ($processId <= 0) {
+            return;
+        }
+
+        $processData = $this->processoModel->getById($processId);
+        $process = $processData['processo'] ?? null;
+        if ($process === null) {
+            return;
+        }
+
+        if ($this->shouldRequireVendorSelection(['status_processo' => $process['status_processo']], $process)) {
+            $this->appendSessionMessage('error_message', self::MISSING_VENDOR_MESSAGE);
             return;
         }
 
@@ -2786,16 +2825,14 @@ class ProcessosController
         $configValue = $this->configModel->get('default_vendedor_id');
         if ($configValue !== null && $configValue !== '') {
             $candidate = (int) $configValue;
-            if ($candidate > 0 && $this->vendedorModel->getById($candidate)) {
+            if (
+                $candidate > 0
+                && $candidate !== self::COMPANY_VENDOR_ID
+                && $this->vendedorModel->getById($candidate)
+            ) {
                 $this->defaultVendorIdCache = $candidate;
                 return $this->defaultVendorIdCache;
             }
-        }
-
-        $fallbackId = 17;
-        if ($this->vendedorModel->getById($fallbackId)) {
-            $this->defaultVendorIdCache = $fallbackId;
-            return $this->defaultVendorIdCache;
         }
 
         $this->defaultVendorIdCache = null;
@@ -2839,6 +2876,33 @@ class ProcessosController
         }
 
         return null;
+    }
+
+    private function determineEffectiveVendorId(array $data, ?array $processo = null): ?int
+    {
+        $vendorId = $this->normalizeVendorId($data['vendedor_id'] ?? $data['id_vendedor'] ?? null);
+        if ($vendorId !== null) {
+            return $vendorId;
+        }
+
+        if ($processo !== null) {
+            return $this->normalizeVendorId($processo['vendedor_id'] ?? null);
+        }
+
+        return null;
+    }
+
+    private function shouldRequireVendorSelection(array $data, ?array $processo = null): bool
+    {
+        $status = $data['status_processo'] ?? ($processo['status_processo'] ?? null);
+
+        if (!$this->isBudgetStatus($status)) {
+            return false;
+        }
+
+        $vendorId = $this->determineEffectiveVendorId($data, $processo);
+
+        return $vendorId === null;
     }
 
     private function ensureDefaultVendor(array $data): array
