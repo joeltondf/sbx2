@@ -207,6 +207,41 @@ class Cliente
             return false;
         }
 
+        $nomeCliente = trim((string)($cliente['nome_cliente'] ?? ''));
+        if ($nomeCliente === '') {
+            throw new Exception('Nome obrigatório.');
+        }
+
+        $email = trim((string)($cliente['email'] ?? ''));
+        $telefone = '';
+        if (isset($cliente['telefone'])) {
+            $telefone = trim((string)$cliente['telefone']);
+        }
+
+        if ($telefone === '') {
+            $telefoneParts = [
+                trim((string)($cliente['telefone_numero'] ?? '')),
+                trim((string)($cliente['telefone_ddd'] ?? '')),
+                trim((string)($cliente['telefone_ddi'] ?? '')),
+            ];
+
+            foreach ($telefoneParts as $part) {
+                if ($part !== '') {
+                    $telefone = $part;
+                    break;
+                }
+            }
+        }
+
+        if ($email === '' && $telefone === '') {
+            throw new Exception('Contato obrigatório (e-mail ou telefone).');
+        }
+
+        $cidade = trim((string)($cliente['cidade'] ?? ''));
+        if ($cidade === '') {
+            throw new Exception('Cidade obrigatória.');
+        }
+
         $needsConversion = (int)($cliente['is_prospect'] ?? 1) === 1;
         $shouldStampConversionDate = $this->hasConversionDateColumn();
 
