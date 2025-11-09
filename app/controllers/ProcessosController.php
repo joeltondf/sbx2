@@ -1157,8 +1157,10 @@ class ProcessosController
                 $successMessage = 'Processo concluído.';
             } elseif ($newStatusNormalized === 'cancelado') {
                 $successMessage = 'Processo cancelado.';
-            } elseif ($newStatusNormalized === 'aguardando pagamento') {
-                $successMessage = 'Processo atualizado para Aguardando pagamento.';
+            } elseif ($newStatusNormalized === 'pendente de pagamento') {
+                $successMessage = 'Processo atualizado para Pendente de pagamento.';
+            } elseif ($newStatusNormalized === 'pendente de documentos') {
+                $successMessage = 'Processo atualizado para Pendente de documentos.';
             }
             $_SESSION['success_message'] = $successMessage;
         }
@@ -1205,9 +1207,15 @@ class ProcessosController
                     $this->notifyUser($sellerUserId, $senderId, $message, $link, 'processo_servico_aprovado', $processId, 'vendedor');
                 }
                 break;
-            case 'aguardando pagamento':
+            case 'pendente de pagamento':
                 if ($sellerUserId && $senderId !== $sellerUserId) {
-                    $message = "Seu serviço #{$process['orcamento_numero']} está aguardando pagamento.";
+                    $message = "Seu serviço #{$process['orcamento_numero']} está pendente de pagamento.";
+                    $this->notifyUser($sellerUserId, $senderId, $message, $link, 'processo_servico_aprovado', $processId, 'vendedor');
+                }
+                break;
+            case 'pendente de documentos':
+                if ($sellerUserId && $senderId !== $sellerUserId) {
+                    $message = "Seu serviço #{$process['orcamento_numero']} está pendente de documentos.";
                     $this->notifyUser($sellerUserId, $senderId, $message, $link, 'processo_servico_aprovado', $processId, 'vendedor');
                 }
                 break;
@@ -1837,7 +1845,7 @@ class ProcessosController
             if (!$vendedorUserId || $vendedorUserId != ($_SESSION['user_id'] ?? null)) {
                 return false;
             }
-            $allowed = ['Orçamento', 'Orçamento Pendente', 'Serviço Pendente', 'Aguardando pagamento'];
+            $allowed = ['Orçamento', 'Orçamento Pendente', 'Serviço Pendente', 'Pendente de pagamento', 'Pendente de documentos'];
             return in_array($novoStatus, $allowed, true);
         }
 
@@ -1851,7 +1859,8 @@ class ProcessosController
             'orçamento',
             'serviço pendente',
             'serviço em andamento',
-            'aguardando pagamento',
+            'pendente de pagamento',
+            'pendente de documentos',
             'concluído',
             'cancelado',
         ];
@@ -2468,6 +2477,8 @@ class ProcessosController
             'data_pagamento_2' => $dataPagamento2,
         ];
 
+        $this->applyDeadlinePauseLogic($processo, $input, $novoStatus, $dados);
+
         if ($clienteId > 0) {
             $dados['cliente_id'] = $clienteId;
         }
@@ -2477,6 +2488,136 @@ class ProcessosController
         }
 
         return $dados;
+    }
+
+    private function applyDeadlinePauseLogic(array $processo, array $input, string $novoStatus, array &$dados): void
+    {
+        $pauseStatuses = ['pendente de pagamento', 'pendente de documentos'];
+        $previousStatus = $this->normalizeStatusName($processo['status_processo'] ?? '');
+        $newStatus = $this->normalizeStatusName($novoStatus);
+
+        $wasPaused = in_array($previousStatus, $pauseStatuses, true);
+        $willPause = in_array($newStatus, $pauseStatuses, true);
+        $deadlineChanged = $this->deadlineFieldsChanged($processo, $dados);
+
+        if ($willPause) {
+            if (!$wasPaused || empty($processo['prazo_pausado_em'] ?? null)) {
+                $dados['prazo_pausado_em'] = (new DateTimeImmutable())->format('Y-m-d H:i:s');
+            }
+
+            if ($deadlineChanged || !$wasPaused || !array_key_exists('prazo_dias_restantes', $processo)) {
+                $dados['prazo_dias_restantes'] = $this->calculateRemainingDaysForPause($processo, $dados);
+            }
+
+            return;
+        }
+
+        if ($wasPaused) {
+            $dados['prazo_pausado_em'] = null;
+            $dados['prazo_dias_restantes'] = null;
+
+            $storedDays = $processo['prazo_dias_restantes'] ?? null;
+            if ($storedDays !== null && !$deadlineChanged) {
+                $remainingDays = (int) $storedDays;
+                $newDeadline = (new DateTimeImmutable('today'))->modify('+' . $remainingDays . ' days');
+                if ($newDeadline !== false) {
+                    $dados['traducao_prazo_data'] = $newDeadline->format('Y-m-d');
+                    $dados['traducao_prazo_tipo'] = 'data';
+                }
+            }
+        }
+    }
+
+    private function deadlineFieldsChanged(array $processo, array $dados): bool
+    {
+        $fields = ['traducao_prazo_data', 'traducao_prazo_dias', 'data_inicio_traducao'];
+
+        foreach ($fields as $field) {
+            $original = $processo[$field] ?? null;
+            $updated = $dados[$field] ?? null;
+
+            if ($field === 'traducao_prazo_dias') {
+                $original = $original === null || $original === '' ? null : (int) $original;
+                $updated = $updated === null || $updated === '' ? null : (int) $updated;
+            } else {
+                $original = $original === null || $original === '' ? null : (string) $original;
+                $updated = $updated === null || $updated === '' ? null : (string) $updated;
+            }
+
+            if ($original !== $updated) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function calculateRemainingDaysForPause(array $processo, array $dados): ?int
+    {
+        $deadline = $this->determineEffectiveDeadline($processo, $dados);
+        if ($deadline === null) {
+            return null;
+        }
+
+        $today = new DateTimeImmutable('today');
+        $diff = $today->diff($deadline);
+        $daysRemaining = (int) $diff->format('%r%a');
+
+        return $daysRemaining < 0 ? 0 : $daysRemaining;
+    }
+
+    private function determineEffectiveDeadline(array $processo, array $dados): ?DateTimeImmutable
+    {
+        $candidateDate = $dados['traducao_prazo_data'] ?? null;
+        if (!empty($candidateDate)) {
+            try {
+                return new DateTimeImmutable((string) $candidateDate);
+            } catch (Throwable $exception) {
+                // Ignora e tenta alternativas
+            }
+        }
+
+        $prazoDias = $dados['traducao_prazo_dias'] ?? null;
+        $inicio = $dados['data_inicio_traducao'] ?? null;
+        if ($prazoDias !== null && $inicio) {
+            try {
+                $start = new DateTimeImmutable((string) $inicio);
+                return $start->modify('+' . (int) $prazoDias . ' days');
+            } catch (Throwable $exception) {
+                // Ignora e tenta alternativas
+            }
+        }
+
+        $existingDate = $processo['traducao_prazo_data'] ?? null;
+        if (!empty($existingDate)) {
+            try {
+                return new DateTimeImmutable((string) $existingDate);
+            } catch (Throwable $exception) {
+                // Ignora e tenta alternativas
+            }
+        }
+
+        $existingPrazoDias = $processo['traducao_prazo_dias'] ?? null;
+        $existingInicio = $processo['data_inicio_traducao'] ?? null;
+        if ($existingPrazoDias !== null && $existingInicio) {
+            try {
+                $start = new DateTimeImmutable((string) $existingInicio);
+                return $start->modify('+' . (int) $existingPrazoDias . ' days');
+            } catch (Throwable $exception) {
+                // Ignora e tenta alternativas
+            }
+        }
+
+        $fallbackDate = $processo['data_previsao_entrega'] ?? null;
+        if (!empty($fallbackDate)) {
+            try {
+                return new DateTimeImmutable((string) $fallbackDate);
+            } catch (Throwable $exception) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2686,6 +2827,11 @@ class ProcessosController
             'serviço em andamento' => 'serviço em andamento',
             'servico em andamento' => 'serviço em andamento',
             'em andamento' => 'serviço em andamento',
+            'aguardando pagamento' => 'pendente de pagamento',
+            'aguardando documento' => 'pendente de documentos',
+            'pendente de documento' => 'pendente de documentos',
+            'pendente documento' => 'pendente de documentos',
+            'pendente documentos' => 'pendente de documentos',
             'finalizado' => 'concluído',
             'finalizada' => 'concluído',
             'concluido' => 'concluído',
@@ -2741,8 +2887,10 @@ class ProcessosController
                 return 'bg-orange-100 text-orange-800';
             case 'serviço em andamento':
                 return 'bg-cyan-100 text-cyan-800';
-            case 'aguardando pagamento':
+            case 'pendente de pagamento':
                 return 'bg-indigo-100 text-indigo-800';
+            case 'pendente de documentos':
+                return 'bg-violet-100 text-violet-800';
             case 'concluído':
                 return 'bg-green-100 text-green-800';
             case 'cancelado':
@@ -2800,7 +2948,7 @@ class ProcessosController
         }
 
         $normalized = $this->normalizeStatusName($status);
-        $serviceStatuses = ['serviço pendente', 'serviço em andamento', 'aguardando pagamento', 'concluído'];
+        $serviceStatuses = ['serviço pendente', 'serviço em andamento', 'pendente de pagamento', 'pendente de documentos', 'concluído'];
 
         return in_array($normalized, $serviceStatuses, true);
     }
