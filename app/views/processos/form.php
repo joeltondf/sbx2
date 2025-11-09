@@ -44,6 +44,7 @@ if ($isEditMode) {
 } else {
     $processo = $formData;
 }
+$prospeccaoId = $processo['prospeccao_id'] ?? ($_GET['prospeccao_id'] ?? null);
 $cliente_id_selecionado = $_GET['cliente_id'] ?? ($processo['cliente_id'] ?? null);
 
 // Se o usuário for vendedor, fixa o responsável como o próprio usuário logado.
@@ -118,6 +119,9 @@ $paymentDateTwo = $processo['data_pagamento_2'] ?? $formData['data_pagamento_2']
     <input type="hidden" name="return_to" value="<?php echo htmlspecialchars($return_url); ?>">
     <?php if ($isEditMode): ?>
         <input type="hidden" name="id" value="<?php echo $processo['id']; ?>">
+    <?php endif; ?>
+    <?php if (!empty($prospeccaoId)): ?>
+        <input type="hidden" name="prospeccao_id" value="<?php echo htmlspecialchars((string) $prospeccaoId); ?>">
     <?php endif; ?>
     <?php
     // A variável $isEditMode já existe no topo deste arquivo.

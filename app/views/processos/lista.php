@@ -56,6 +56,7 @@ require_once __DIR__ . '/../layouts/header.php';
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
+$baseAppUrl = defined('APP_URL') ? APP_URL : '';
 ?>
 
     <div class="flex justify-between items-center mb-6">
@@ -76,6 +77,7 @@ if (session_status() == PHP_SESSION_NONE) {
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">OS</th>
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Título</th>
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Cliente</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Prospecção</th>
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Data de Entrada</th>
                     <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Previsão de Entrega</th>
@@ -129,6 +131,24 @@ if (session_status() == PHP_SESSION_NONE) {
                                 </td>
                                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-xs">
                                     <p class="text-gray-900 whitespace-no-wrap"><?php echo htmlspecialchars(mb_strtoupper($processo['nome_cliente'] ?? '')); ?></p>
+                                </td>
+                                <td class="px-5 py-5 border-b border-gray-200 bg-white text-xs">
+                                    <?php
+                                        $prospectionId = isset($processo['prospeccao_id']) ? (int) $processo['prospeccao_id'] : 0;
+                                        $prospectionCode = trim((string) ($processo['prospeccao_codigo'] ?? ''));
+                                        $prospectionName = trim((string) ($processo['prospeccao_nome'] ?? ''));
+                                        $prospectionLabel = $prospectionCode !== ''
+                                            ? $prospectionCode
+                                            : ($prospectionId > 0 ? ('ID #' . $prospectionId) : '—');
+                                        if ($prospectionId > 0) {
+                                            $link = rtrim($baseAppUrl, '/') . '/crm/prospeccoes/detalhes.php?id=' . $prospectionId;
+                                            $title = $prospectionName !== '' ? $prospectionName : 'Abrir prospecção';
+                                            echo '<a href="' . htmlspecialchars($link) . '" class="text-blue-600 hover:text-blue-800" title="' . htmlspecialchars($title) . '">'
+                                                . htmlspecialchars($prospectionLabel) . '</a>';
+                                        } else {
+                                            echo '<span class="text-gray-400">—</span>';
+                                        }
+                                    ?>
                                 </td>
                                 <td class="px-5 py-5 border-b border-gray-200 bg-white text-xs whitespace-nowrap">
                                     <span class="relative inline-block px-3 py-1 font-semibold leading-tight rounded-full <?php echo $statusClasses; ?>">

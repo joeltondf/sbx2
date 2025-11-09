@@ -184,6 +184,11 @@ class ProcessosController
         $tradutores = $this->tradutorModel->getAll();
         $formData = $this->consumeFormInput(self::SESSION_KEY_PROCESS_FORM);
 
+        $prospectionId = isset($_GET['prospeccao_id']) ? (int) $_GET['prospeccao_id'] : null;
+        if ($prospectionId && empty($formData['prospeccao_id'])) {
+            $formData['prospeccao_id'] = $prospectionId;
+        }
+
         $categoriaModel = new CategoriaFinanceira($this->pdo);
         $financeiroServicos = [
             'Tradução' => $categoriaModel->getReceitasPorServico('Tradução'),
@@ -228,13 +233,28 @@ class ProcessosController
         // Criação de novo processo
         // ------------------------------------------------------------------
         if (empty($id_existente)) {
+            $prospectionId = isset($_POST['prospeccao_id']) && $_POST['prospeccao_id'] !== ''
+                ? (int) $_POST['prospeccao_id']
+                : null;
             // Fluxo de serviço rápido
             if (isset($_POST['status_proposto'])) {
                 $dadosParaSalvar = $_POST;
                 $dadosParaSalvar = $this->ensureDefaultVendor($dadosParaSalvar);
+                if ($prospectionId !== null) {
+                    $dadosParaSalvar['prospeccao_id'] = $prospectionId;
+                }
                 $perfilUsuario = $_SESSION['user_perfil'] ?? '';
-                $clienteId = $dadosParaSalvar['cliente_id'] ?? null;
                 $documentos = $dadosParaSalvar['documentos'] ?? ($dadosParaSalvar['docs'] ?? []);
+
+                try {
+                    $clienteId = $this->requireValidClientId($dadosParaSalvar['cliente_id'] ?? null);
+                    $dadosParaSalvar['cliente_id'] = $clienteId;
+                } catch (InvalidArgumentException $exception) {
+                    $_SESSION['error_message'] = $exception->getMessage();
+                    $this->rememberFormInput(self::SESSION_KEY_SERVICO_FORM, $dadosParaSalvar);
+                    header('Location: servico-rapido.php?action=create');
+                    exit();
+                }
 
                 // Verifica pendência para colaboradores/vendedores
                 $pendente = false;
@@ -266,7 +286,12 @@ class ProcessosController
                         }
                     }
 
-                    $this->convertProspectIfNeeded((int)($dadosParaSalvar['cliente_id'] ?? 0), $dadosParaSalvar['status_processo'] ?? null);
+                    try {
+                        $this->convertProspectIfNeeded($dadosParaSalvar['cliente_id'] ?? null, $dadosParaSalvar['status_processo'] ?? null);
+                    } catch (InvalidArgumentException $exception) {
+                        $_SESSION['error_message'] = $exception->getMessage();
+                        unset($_SESSION['success_message']);
+                    }
                     if (in_array($dadosParaSalvar['status_processo'], ['Serviço em Andamento', 'Serviço Pendente'], true)) {
                         $this->queueServiceOrderGeneration($processoId);
                     }
@@ -283,6 +308,11 @@ class ProcessosController
 
             // Fluxo de orçamento normal
             $dadosProcesso = $this->ensureDefaultVendor($_POST);
+            if ($prospectionId !== null) {
+                $dadosProcesso['prospeccao_id'] = $prospectionId;
+            } else {
+                unset($dadosProcesso['prospeccao_id']);
+            }
             $dadosProcesso = $this->prepareOmieSelectionData($dadosProcesso);
             $dadosProcesso = $this->applyPaymentDefaults($dadosProcesso);
             if ($this->shouldRequireVendorSelection($dadosProcesso)) {
@@ -300,7 +330,12 @@ class ProcessosController
             $redirectUrl = 'dashboard.php';
             if ($novo_id) {
                 $status_inicial = $dadosProcesso['status_processo'] ?? 'Orçamento';
-                $this->convertProspectIfNeeded((int)($dadosProcesso['cliente_id'] ?? 0), $status_inicial);
+                try {
+                    $this->convertProspectIfNeeded($dadosProcesso['cliente_id'] ?? null, $status_inicial);
+                } catch (InvalidArgumentException $exception) {
+                    $_SESSION['error_message'] = $exception->getMessage();
+                    unset($_SESSION['success_message']);
+                }
                 $mensagemSucesso = "Processo cadastrado com sucesso!";
 
                 if ($status_inicial === 'Orçamento') {
@@ -418,8 +453,13 @@ class ProcessosController
             if ($this->shouldGenerateOmieOs($novoStatus)) {
                 $this->queueServiceOrderGeneration($id_existente);
             }
-            $clienteParaConverter = (int)($dadosParaAtualizar['cliente_id'] ?? $processoOriginal['cliente_id']);
-            $this->convertProspectIfNeeded($clienteParaConverter, $novoStatus);
+            $clienteParaConverter = $dadosParaAtualizar['cliente_id'] ?? $processoOriginal['cliente_id'];
+            try {
+                $this->convertProspectIfNeeded($clienteParaConverter, $novoStatus);
+            } catch (InvalidArgumentException $exception) {
+                $_SESSION['error_message'] = $exception->getMessage();
+                unset($_SESSION['success_message']);
+            }
             if ($this->isBudgetStatus($novoStatus)) {
                 $this->queueBudgetEmails($id_existente, $_SESSION['user_id'] ?? null);
             }
@@ -586,9 +626,26 @@ class ProcessosController
 
         $dadosParaSalvar = $_POST;
         $dadosParaSalvar = $this->ensureDefaultVendor($dadosParaSalvar);
+        $prospectionId = isset($_POST['prospeccao_id']) && $_POST['prospeccao_id'] !== ''
+            ? (int) $_POST['prospeccao_id']
+            : null;
+        if ($prospectionId !== null) {
+            $dadosParaSalvar['prospeccao_id'] = $prospectionId;
+        } else {
+            unset($dadosParaSalvar['prospeccao_id']);
+        }
         $perfilUsuario = $_SESSION['user_perfil'] ?? '';
-        $clienteId = $dadosParaSalvar['cliente_id'] ?? null;
         $documentos = $dadosParaSalvar['documentos'] ?? ($dadosParaSalvar['docs'] ?? []);
+
+        try {
+            $clienteId = $this->requireValidClientId($dadosParaSalvar['cliente_id'] ?? null);
+            $dadosParaSalvar['cliente_id'] = $clienteId;
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['error_message'] = $exception->getMessage();
+            $this->rememberFormInput(self::SESSION_KEY_SERVICO_FORM, $dadosParaSalvar);
+            header('Location: servico-rapido.php?action=create');
+            exit();
+        }
 
         // Calcula pendência para colaboradores ou vendedores
         $pendente = false;
@@ -1054,7 +1111,12 @@ class ProcessosController
         $leftPending = in_array($previousStatusNormalized, $pendingStatuses, true)
             && !in_array($newStatusNormalized, $pendingStatuses, true);
 
-        $this->convertProspectIfNeeded($customerId, $newStatus);
+        try {
+            $this->convertProspectIfNeeded($customerId, $newStatus);
+        } catch (InvalidArgumentException $exception) {
+            $_SESSION['error_message'] = $exception->getMessage();
+            unset($_SESSION['success_message']);
+        }
 
         if ($leadConversionRequested) {
             $this->syncConvertedClientWithOmie($customerId);
@@ -2745,15 +2807,35 @@ class ProcessosController
 
     private function convertProspectIfNeeded(?int $clienteId, ?string $status): void
     {
-        if (($clienteId ?? 0) <= 0) {
-            return;
-        }
-
         if (!$this->shouldConvertProspectToClient($status)) {
             return;
         }
 
-        $this->clienteModel->promoteProspectToClient($clienteId);
+        $validClientId = $this->requireValidClientId($clienteId);
+        $this->clienteModel->promoteProspectToClient($validClientId);
+    }
+
+    private function requireValidClientId($clienteId): int
+    {
+        if (is_string($clienteId)) {
+            $clienteId = trim($clienteId);
+        }
+
+        if ($clienteId === null || $clienteId === '') {
+            throw new InvalidArgumentException('Selecione um cliente válido antes de continuar.');
+        }
+
+        $validated = filter_var($clienteId, FILTER_VALIDATE_INT);
+        if ($validated === false) {
+            throw new InvalidArgumentException('Selecione um cliente válido antes de continuar.');
+        }
+
+        $intClientId = (int) $validated;
+        if ($intClientId <= 0) {
+            throw new InvalidArgumentException('Selecione um cliente válido antes de continuar.');
+        }
+
+        return $intClientId;
     }
 
     private function resolveLoggedInVendedor(array $vendedores): array

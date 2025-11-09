@@ -106,6 +106,13 @@ $isManager = in_array($_SESSION['user_perfil'] ?? '', ['admin', 'gerencia', 'sup
 $isBudgetPending = $statusNormalized === 'orçamento pendente';
 $shouldHideStatusPanel = $isManager && $isBudgetPending;
 $isServicePending = $statusNormalized === 'serviço pendente';
+$baseAppUrl = defined('APP_URL') ? APP_URL : '';
+$prospectionId = isset($processo['prospeccao_id']) ? (int) $processo['prospeccao_id'] : 0;
+$prospectionCode = trim((string) ($processo['prospeccao_codigo'] ?? ''));
+$prospectionName = trim((string) ($processo['prospeccao_nome'] ?? ''));
+$prospectionLabel = $prospectionCode !== ''
+    ? $prospectionCode
+    : ($prospectionId > 0 ? ('ID #' . $prospectionId) : null);
 ?>
 
 
@@ -164,6 +171,21 @@ $isServicePending = $statusNormalized === 'serviço pendente';
                 <div>
                     <p class="text-sm font-medium text-gray-500">Vendedor Responsável</p>
                     <p class="text-lg text-gray-800"><?php echo htmlspecialchars($processo['nome_vendedor'] ?? 'N/A'); ?></p>
+                </div>
+                <div class="md:col-span-2">
+                    <p class="text-sm font-medium text-gray-500">Prospecção de Origem</p>
+                    <?php if ($prospectionId > 0): ?>
+                        <?php $prospectionLink = rtrim($baseAppUrl, '/') . '/crm/prospeccoes/detalhes.php?id=' . $prospectionId; ?>
+                        <a
+                            href="<?php echo htmlspecialchars($prospectionLink); ?>"
+                            class="text-blue-600 hover:text-blue-800"
+                            title="<?php echo htmlspecialchars($prospectionName !== '' ? $prospectionName : 'Abrir prospecção'); ?>"
+                        >
+                            <?php echo htmlspecialchars($prospectionLabel ?? ('ID #' . $prospectionId)); ?>
+                        </a>
+                    <?php else: ?>
+                        <p class="text-lg text-gray-400">Não vinculado</p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
