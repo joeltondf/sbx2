@@ -171,7 +171,7 @@ $prazoTipoSelecionado = $formData['prazo_tipo'] ?? 'dias';
             </div>
             <div class="md:col-span-3">
                 <label class="block text-sm font-semibold text-gray-700">Serviços Contratados *</label>
-                <div class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4">
+                <div class="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                     <?php
                     $servicos_lista = ['Tradução', 'CRC', 'Apostilamento', 'Postagem', 'Outros'];
                     $slug_map = ['Tradução' => 'tradução', 'CRC' => 'crc', 'Apostilamento' => 'apostilamento', 'Postagem' => 'postagem', 'Outros' => 'outros'];

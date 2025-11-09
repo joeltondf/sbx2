@@ -239,7 +239,7 @@ $paymentDateTwo = $processo['data_pagamento_2'] ?? $formData['data_pagamento_2']
 
     <fieldset class="border border-gray-200 rounded-md p-6 mt-6">
         <legend class="text-lg font-semibold text-gray-700 px-2 bg-white ml-4">Serviços Orçados</legend>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mt-4">
             <?php
             $categorias = ['Tradução', 'CRC', 'Apostilamento', 'Postagem', 'Outros'];
             $categoriasRaw = $processo['categorias_servico'] ?? [];
