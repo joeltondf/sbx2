@@ -178,6 +178,11 @@ class ProcessosController
         $tradutores = $this->tradutorModel->getAll();
         $formData = $this->consumeFormInput(self::SESSION_KEY_PROCESS_FORM);
 
+        $prospectionId = isset($_GET['prospeccao_id']) ? (int) $_GET['prospeccao_id'] : null;
+        if ($prospectionId && empty($formData['prospeccao_id'])) {
+            $formData['prospeccao_id'] = $prospectionId;
+        }
+
         $categoriaModel = new CategoriaFinanceira($this->pdo);
         $financeiroServicos = [
             'Tradução' => $categoriaModel->getReceitasPorServico('Tradução'),
@@ -222,10 +227,16 @@ class ProcessosController
         // Criação de novo processo
         // ------------------------------------------------------------------
         if (empty($id_existente)) {
+            $prospectionId = isset($_POST['prospeccao_id']) && $_POST['prospeccao_id'] !== ''
+                ? (int) $_POST['prospeccao_id']
+                : null;
             // Fluxo de serviço rápido
             if (isset($_POST['status_proposto'])) {
                 $dadosParaSalvar = $_POST;
                 $dadosParaSalvar = $this->ensureDefaultVendor($dadosParaSalvar);
+                if ($prospectionId !== null) {
+                    $dadosParaSalvar['prospeccao_id'] = $prospectionId;
+                }
                 $perfilUsuario = $_SESSION['user_perfil'] ?? '';
                 $documentos = $dadosParaSalvar['documentos'] ?? ($dadosParaSalvar['docs'] ?? []);
 
@@ -291,6 +302,11 @@ class ProcessosController
 
             // Fluxo de orçamento normal
             $dadosProcesso = $this->ensureDefaultVendor($_POST);
+            if ($prospectionId !== null) {
+                $dadosProcesso['prospeccao_id'] = $prospectionId;
+            } else {
+                unset($dadosProcesso['prospeccao_id']);
+            }
             $dadosProcesso = $this->prepareOmieSelectionData($dadosProcesso);
             $dadosProcesso = $this->applyPaymentDefaults($dadosProcesso);
 
@@ -602,6 +618,14 @@ class ProcessosController
 
         $dadosParaSalvar = $_POST;
         $dadosParaSalvar = $this->ensureDefaultVendor($dadosParaSalvar);
+        $prospectionId = isset($_POST['prospeccao_id']) && $_POST['prospeccao_id'] !== ''
+            ? (int) $_POST['prospeccao_id']
+            : null;
+        if ($prospectionId !== null) {
+            $dadosParaSalvar['prospeccao_id'] = $prospectionId;
+        } else {
+            unset($dadosParaSalvar['prospeccao_id']);
+        }
         $perfilUsuario = $_SESSION['user_perfil'] ?? '';
         $documentos = $dadosParaSalvar['documentos'] ?? ($dadosParaSalvar['docs'] ?? []);
 
