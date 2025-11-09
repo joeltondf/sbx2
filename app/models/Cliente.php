@@ -207,6 +207,13 @@ class Cliente
             return false;
         }
 
+        $needsConversion = (int)($cliente['is_prospect'] ?? 1) === 1;
+        $shouldStampConversionDate = $this->hasConversionDateColumn();
+
+        if (!$needsConversion && !$shouldStampConversionDate) {
+            return true;
+        }
+
         $nomeCliente = trim((string)($cliente['nome_cliente'] ?? ''));
         if ($nomeCliente === '') {
             throw new Exception('Nome obrigatório.');
@@ -240,13 +247,6 @@ class Cliente
         $cidade = trim((string)($cliente['cidade'] ?? ''));
         if ($cidade === '') {
             throw new Exception('Cidade obrigatória.');
-        }
-
-        $needsConversion = (int)($cliente['is_prospect'] ?? 1) === 1;
-        $shouldStampConversionDate = $this->hasConversionDateColumn();
-
-        if (!$needsConversion && !$shouldStampConversionDate) {
-            return true;
         }
 
         $columnsToUpdate = [];
