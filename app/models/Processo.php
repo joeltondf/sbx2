@@ -169,7 +169,7 @@ public function create($data, $files)
         // ===== INÍCIO DA CORREÇÃO =====
         // Query SQL CORRIGIDA: A coluna 'orcamento_comprovantes' foi removida.
         $sqlProcesso = "INSERT INTO processos (
-            cliente_id, colaborador_id, vendedor_id, titulo, status_processo,
+            cliente_id, colaborador_id, vendedor_id, prospeccao_id, titulo, status_processo,
             orcamento_numero, orcamento_origem, orcamento_prazo_calculado,
             data_previsao_entrega, categorias_servico, idioma,
             valor_total, orcamento_forma_pagamento, orcamento_parcelas, orcamento_valor_entrada,
@@ -181,7 +181,7 @@ public function create($data, $files)
             assinatura_tipo, tradutor_id, modalidade_assinatura,
             etapa_faturamento_codigo, codigo_categoria, codigo_conta_corrente, codigo_cenario_fiscal, os_numero_conta_azul
         ) VALUES (
-            :cliente_id, :colaborador_id, :vendedor_id, :titulo, :status_processo,
+            :cliente_id, :colaborador_id, :vendedor_id, :prospeccao_id, :titulo, :status_processo,
             :orcamento_numero, :orcamento_origem, :orcamento_prazo_calculado,
             :data_previsao_entrega, :categorias_servico, :idioma,
             :valor_total, :orcamento_forma_pagamento, :orcamento_parcelas, :orcamento_valor_entrada,
@@ -204,6 +204,7 @@ public function create($data, $files)
             'colaborador_id' => $_SESSION['user_id'],
             'vendedor_id' => $this->resolveVendorId($data),
             'titulo' => $data['titulo'] ?? 'Orçamento #' . $orcamento_numero,
+            'prospeccao_id' => $this->sanitizeNullableInt($data['prospeccao_id'] ?? null),
             'status_processo' => $data['status_processo'] ?? $data['status'] ?? 'Orçamento',
             'orcamento_numero' => $orcamento_numero,
             'orcamento_origem' => $data['orcamento_origem'] ?? null,
@@ -296,15 +297,18 @@ public function create($data, $files)
     public function getById($id)
     {
         // A correção está na consulta SQL abaixo, que agora inclui um JOIN com a tabela 'users'.
-        $sql = "SELECT 
-                    p.*, 
-                    c.nome_cliente, 
+        $sql = "SELECT
+                    p.*,
+                    c.nome_cliente,
+                    pr.id_texto AS prospeccao_codigo,
+                    pr.nome_prospecto AS prospeccao_nome,
                     u_vendedor.nome_completo as nome_vendedor, -- Pega o nome da tabela 'users'
-                    t.nome_tradutor 
+                    t.nome_tradutor
                 FROM processos p
                 LEFT JOIN clientes c ON p.cliente_id = c.id
                 LEFT JOIN vendedores v ON p.vendedor_id = v.id
                 LEFT JOIN users u_vendedor ON v.user_id = u_vendedor.id -- FAZ O JOIN ADICIONAL AQUI
+                LEFT JOIN prospeccoes pr ON p.prospeccao_id = pr.id
                 LEFT JOIN tradutores t ON p.tradutor_id = t.id
                 WHERE p.id = ?";
         
@@ -617,7 +621,10 @@ public function create($data, $files)
     {
         $sql = "SELECT
                     p.orcamento_numero, p.id, p.titulo, p.status_processo, p.data_entrada,
-                    p.data_previsao_entrega, p.valor_total, c.nome_cliente,
+                    p.data_previsao_entrega, p.valor_total, p.prospeccao_id,
+                    c.nome_cliente,
+                    pr.id_texto AS prospeccao_codigo,
+                    pr.nome_prospecto AS prospeccao_nome,
                     u_colab.nome_completo as nome_colaborador,
                     u_vend.nome_completo as nome_vendedor
                 FROM processos p
@@ -625,6 +632,7 @@ public function create($data, $files)
                 JOIN users u_colab ON p.colaborador_id = u_colab.id
                 LEFT JOIN vendedores v ON p.vendedor_id = v.id
                 LEFT JOIN users u_vend ON v.user_id = u_vend.id
+                LEFT JOIN prospeccoes pr ON p.prospeccao_id = pr.id
                 WHERE p.status_processo NOT IN ('Cancelado', 'Recusado')
                 ORDER BY p.id DESC";
         $stmt = $this->pdo->query($sql);
@@ -642,10 +650,12 @@ public function create($data, $files)
     {
         $select_part = "SELECT
                     p.id, p.titulo, p.status_processo, p.data_criacao, p.data_previsao_entrega,
-                    p.valor_total,
+                    p.valor_total, p.prospeccao_id,
+                    pr.id_texto AS prospeccao_codigo,
+                    pr.nome_prospecto AS prospeccao_nome,
                     p.categorias_servico, c.nome_cliente, t.nome_tradutor, p.os_numero_omie, p.os_numero_conta_azul,
                     p.data_inicio_traducao, p.traducao_prazo_data, p.traducao_prazo_dias, p.traducao_modalidade, p.assinatura_tipo,
-                    p.data_envio_assinatura, p.data_devolucao_assinatura, p.data_envio_cartorio, 
+                    p.data_envio_assinatura, p.data_devolucao_assinatura, p.data_envio_cartorio,
                     v.nome_completo as nome_vendedor,
                     (SELECT COUNT(*) FROM documentos d WHERE d.processo_id = p.id) as total_documentos_contagem,
                     (SELECT COALESCE(SUM(d.quantidade), 0) FROM documentos d WHERE d.processo_id = p.id) as total_documentos_soma";
@@ -654,7 +664,8 @@ public function create($data, $files)
                     JOIN clientes AS c ON p.cliente_id = c.id
                     LEFT JOIN tradutores AS t ON p.tradutor_id = t.id
                     LEFT JOIN vendedores AS vend ON p.vendedor_id = vend.id
-                    LEFT JOIN users AS v ON vend.user_id = v.id";
+                    LEFT JOIN users AS v ON vend.user_id = v.id
+                    LEFT JOIN prospeccoes AS pr ON p.prospeccao_id = pr.id";
 
     $where_clauses = [];
     $params = [];
@@ -2019,10 +2030,10 @@ public function create($data, $files)
             $omieKeyPreview = $this->generateNextOmieKey();
 
             $sqlProcesso = "INSERT INTO processos (
-                cliente_id, colaborador_id, vendedor_id, titulo, valor_total,
+                cliente_id, colaborador_id, vendedor_id, prospeccao_id, titulo, valor_total,
                 status_processo, orcamento_numero, data_entrada, os_numero_conta_azul
             ) VALUES (
-                :cliente_id, :colaborador_id, :vendedor_id, :titulo, :valor_total,
+                :cliente_id, :colaborador_id, :vendedor_id, :prospeccao_id, :titulo, :valor_total,
                 :status_processo, :orcamento_numero, :data_entrada, :os_numero_conta_azul
             )";
             $stmtProcesso = $this->pdo->prepare($sqlProcesso);
@@ -2032,6 +2043,7 @@ public function create($data, $files)
                 'colaborador_id'  => $data['colaborador_id'] ?? $data['vendedor_id'], // O vendedor/SDR que fechou se torna o colaborador inicial
                 'vendedor_id'     => $data['vendedor_id'],
                 'titulo'          => $data['titulo'] ?? ('Orçamento #' . $orcamento_numero),
+                'prospeccao_id'   => $this->sanitizeNullableInt($data['prospeccao_id'] ?? null),
                 'valor_total'     => $data['valor_proposto'] ?? 0.00,
                 'status_processo' => $data['status_processo'] ?? 'Orçamento',
                 'orcamento_numero'=> $orcamento_numero,
