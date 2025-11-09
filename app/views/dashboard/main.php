@@ -29,7 +29,8 @@ if (!function_exists('dashboard_normalize_status_info')) {
             'serviço em andamento' => 'serviço em andamento',
             'servico em andamento' => 'serviço em andamento',
             'em andamento' => 'serviço em andamento',
-            'aguardando pagamento' => 'aguardando pagamento',
+            'pendente de pagamento' => 'pendente de pagamento',
+            'pendente de documentos' => 'pendente de documentos',
             'finalizado' => 'concluído',
             'finalizada' => 'concluído',
             'concluido' => 'concluído',
@@ -49,7 +50,8 @@ if (!function_exists('dashboard_normalize_status_info')) {
             'orçamento pendente' => 'Orçamento Pendente',
             'serviço pendente' => 'Serviço Pendente',
             'serviço em andamento' => 'Serviço em Andamento',
-            'aguardando pagamento' => 'Aguardando pagamento',
+            'pendente de pagamento' => 'Pendente de pagamento',
+            'pendente de documentos' => 'Pendente de documentos',
             'concluído' => 'Concluído',
             'cancelado' => 'Cancelado',
         ];
@@ -344,7 +346,7 @@ $highlightedCardFilter = $currentCardFilter !== '' ? $currentCardFilter : ($defa
                     <label for="status" class="text-sm font-semibold text-gray-700 mb-1">Status</label>
                     <select id="status" name="status" class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition duration-200">
                         <option value="">Todos os Status</option>
-                    <?php $statusOptions = ['Orçamento Pendente', 'Orçamento', 'Serviço Pendente', 'Serviço em Andamento', 'Aguardando pagamento', 'Concluído', 'Cancelado']; foreach ($statusOptions as $option): ?>
+                    <?php $statusOptions = ['Orçamento Pendente', 'Orçamento', 'Serviço Pendente', 'Serviço em Andamento', 'Pendente de pagamento', 'Pendente de documentos', 'Concluído', 'Cancelado']; foreach ($statusOptions as $option): ?>
                             <?php $optionInfo = dashboard_normalize_status_info($option); ?>
                             <option value="<?php echo $optionInfo['label']; ?>" <?php echo ($selectedStatusNormalized === $optionInfo['normalized']) ? 'selected' : ''; ?>><?php echo $optionInfo['label']; ?></option>
                         <?php endforeach; ?>
@@ -433,8 +435,11 @@ $highlightedCardFilter = $currentCardFilter !== '' ? $currentCardFilter : ($defa
                                 case 'serviço em andamento':
                                     $rowClass = 'bg-cyan-50 hover:bg-cyan-100';
                                     break;
-                                case 'aguardando pagamento':
+                                case 'pendente de pagamento':
                                     $rowClass = 'bg-indigo-50 hover:bg-indigo-100';
+                                    break;
+                                case 'pendente de documentos':
+                                    $rowClass = 'bg-violet-50 hover:bg-violet-100';
                                     break;
                                 case 'concluído':
                                     $rowClass = 'bg-purple-50 hover:bg-purple-100';
@@ -492,7 +497,7 @@ $highlightedCardFilter = $currentCardFilter !== '' ? $currentCardFilter : ($defa
                                 if ($statusNormalized === 'concluído') {
                                     $texto_tempo = 'Concluído';
                                     $classe_tempo = 'bg-green-100 text-green-800';
-                                } elseif (in_array($statusNormalized, ['cancelado', 'orçamento', 'aguardando pagamento'], true)) {
+                                } elseif (in_array($statusNormalized, ['cancelado', 'orçamento', 'pendente de pagamento', 'pendente de documentos'], true)) {
                                     $texto_tempo = 'N/A';
                                     $classe_tempo = 'text-gray-500';
                                 } else {
@@ -918,7 +923,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'serviço em andamento': 'serviço em andamento',
             'servico em andamento': 'serviço em andamento',
             'em andamento': 'serviço em andamento',
-            'aguardando pagamento': 'aguardando pagamento',
+            'pendente de pagamento': 'pendente de pagamento',
+            'pendente de documentos': 'pendente de documentos',
             'finalizado': 'concluído',
             'finalizada': 'concluído',
             'concluido': 'concluído',
@@ -1003,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (normalizedStatus === 'concluído') {
                             texto_prazo_js = 'Concluído';
                             classe_prazo_js = 'bg-green-100 text-green-800';
-                        } else if (['cancelado', 'orçamento', 'aguardando pagamento'].includes(normalizedStatus)) {
+                        } else if (['cancelado', 'orçamento', 'pendente de pagamento', 'pendente de documentos'].includes(normalizedStatus)) {
                             texto_prazo_js = 'N/A';
                             classe_prazo_js = 'text-gray-500';
                         } else {
