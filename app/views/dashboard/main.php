@@ -502,11 +502,10 @@ $highlightedCardFilter = $currentCardFilter !== '' ? $currentCardFilter : ($defa
                                     $classe_tempo = 'text-gray-500';
                                 } else {
                                     $data_previsao_final = null;
-                                    if (!empty($processo['traducao_prazo_data'])) {
-                                        $data_previsao_final = new DateTime($processo['traducao_prazo_data']);
-                                    } elseif (!empty($processo['traducao_prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
+                                    $prazoDias = $processo['prazo_dias'] ?? $processo['traducao_prazo_dias'] ?? null;
+                                    if (!empty($prazoDias) && !empty($processo['data_inicio_traducao'])) {
                                         $data_previsao_final = new DateTime($processo['data_inicio_traducao']);
-                                        $data_previsao_final->modify('+' . $processo['traducao_prazo_dias'] . ' days');
+                                        $data_previsao_final->modify('+' . $prazoDias . ' days');
                                     }
 
                                     if ($data_previsao_final) {
@@ -1013,15 +1012,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             texto_prazo_js = 'N/A';
                             classe_prazo_js = 'text-gray-500';
                         } else {
-                            if (processo.traducao_prazo_data) {
-                                const previsao = new Date(processo.traducao_prazo_data);
-                                const hoje = new Date();
-                                hoje.setHours(0, 0, 0, 0); // Zera a hora para comparação de datas
+                            // Calcula prazo baseado em prazo_dias + data_inicio_traducao
+                            const prazoDias = processo.prazo_dias || processo.traducao_prazo_dias;
+                            if (prazoDias && processo.data_inicio_traducao) {
+                                const inicio = new Date(processo.data_inicio_traducao);
+                                const previsao = new Date(inicio);
+                                previsao.setDate(previsao.getDate() + parseInt(prazoDias));
 
-                                // Ajuste para garantir que a data de previsão também não considere o fuso horário ao comparar
+                                const hoje = new Date();
+                                hoje.setHours(0, 0, 0, 0);
+
                                 const previsaoUTC = new Date(previsao.getUTCFullYear(), previsao.getUTCMonth(), previsao.getUTCDate());
                                 const diffTime = previsaoUTC.getTime() - hoje.getTime();
-                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Diferença em dias
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                                 if (diffDays < 0) {
                                     texto_prazo_js = Math.abs(diffDays) + ' dia(s) vencido(s)';

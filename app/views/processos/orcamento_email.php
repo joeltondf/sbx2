@@ -113,7 +113,14 @@ if (empty($budgetItems) && $total > 0) {
 }
 
 $infoRows = [];
-$deadlineDate = $process['traducao_prazo_data'] ?? $process['data_previsao_entrega'] ?? null;
+// Calcula deadline baseado em prazo_dias + data_inicio_traducao
+$deadlineDate = null;
+$prazoDias = $process['prazo_dias'] ?? $process['traducao_prazo_dias'] ?? null;
+if (!empty($prazoDias) && !empty($process['data_inicio_traducao'])) {
+    $deadlineDate = date('Y-m-d', strtotime($process['data_inicio_traducao'] . ' + ' . $prazoDias . ' days'));
+} elseif (!empty($process['data_previsao_entrega'])) {
+    $deadlineDate = $process['data_previsao_entrega'];
+}
 if (!empty($deadlineDate)) {
     $infoRows[] = ['Prazo estimado', $formatDate($deadlineDate)];
 }
