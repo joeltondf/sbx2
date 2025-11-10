@@ -378,13 +378,7 @@ class OmieService {
             $cabecalho = [
                 'codigo_pedido_integracao' => $codigoIntegracao,
                 'codigo_cliente' => (int)$cliente['omie_id'],
-                'data_previsao' => $this->formatDateForOmie(
-                    $processo['data_previsao_entrega'] ??
-                    ($processo['prazo_dias'] && $processo['data_inicio_traducao'] ?
-                        date('Y-m-d', strtotime($processo['data_inicio_traducao'] . ' + ' . $processo['prazo_dias'] . ' days')) :
-                        null
-                    )
-                ),
+                'data_previsao' => $this->formatDateForOmie($processo['data_previsao_entrega'] ?? $processo['traducao_prazo_data'] ?? null),
                 'etapa' => $this->resolveEtapaCodigo($processo),
                 'quantidade_itens' => count($itens),
             ];

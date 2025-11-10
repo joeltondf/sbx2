@@ -1,6 +1,7 @@
 <?php
 $formData = $formData ?? [];
 $processId = (int)($processo['id'] ?? 0);
+$deadlineType = $formData['traducao_prazo_tipo'] ?? 'dias';
 
 $conversionSteps = [
     [
@@ -41,11 +42,31 @@ include __DIR__ . '/partials/conversion_steps.php';
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <label class="block text-sm font-semibold text-gray-700" for="data_inicio_traducao">Data de início</label>
-                <input type="date" id="data_inicio_traducao" name="data_inicio_traducao" value="<?php echo htmlspecialchars($formData['data_inicio_traducao'] ?? date('Y-m-d')); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500" required>
+                <input type="date" id="data_inicio_traducao" name="data_inicio_traducao" value="<?php echo htmlspecialchars($formData['data_inicio_traducao'] ?? date('Y-m-d')); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500">
             </div>
             <div>
-                <label class="block text-sm font-semibold text-gray-700" for="prazo_dias">Dias para entrega</label>
-                <input type="number" min="1" id="prazo_dias" name="prazo_dias" value="<?php echo htmlspecialchars($formData['prazo_dias'] ?? $formData['traducao_prazo_dias'] ?? ''); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500" required>
+                <span class="block text-sm font-semibold text-gray-700">Tipo de prazo</span>
+                <div class="mt-3 flex space-x-6">
+                    <label class="inline-flex items-center space-x-2">
+                        <input type="radio" name="traducao_prazo_tipo" value="dias" <?php echo $deadlineType === 'data' ? '' : 'checked'; ?> data-deadline-type>
+                        <span class="text-sm text-gray-700">Dias</span>
+                    </label>
+                    <label class="inline-flex items-center space-x-2">
+                        <input type="radio" name="traducao_prazo_tipo" value="data" <?php echo $deadlineType === 'data' ? 'checked' : ''; ?> data-deadline-type>
+                        <span class="text-sm text-gray-700">Data específica</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="deadline-days-wrapper" class="<?php echo $deadlineType === 'data' ? 'hidden' : ''; ?>">
+                <label class="block text-sm font-semibold text-gray-700" for="traducao_prazo_dias">Dias para entrega</label>
+                <input type="number" min="1" id="traducao_prazo_dias" name="traducao_prazo_dias" value="<?php echo htmlspecialchars($formData['traducao_prazo_dias'] ?? ''); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500" data-deadline-days>
+            </div>
+            <div id="deadline-date-wrapper" class="<?php echo $deadlineType === 'data' ? '' : 'hidden'; ?>">
+                <label class="block text-sm font-semibold text-gray-700" for="traducao_prazo_data">Data de entrega</label>
+                <input type="date" id="traducao_prazo_data" name="traducao_prazo_data" value="<?php echo htmlspecialchars($formData['traducao_prazo_data'] ?? ''); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500" data-deadline-date>
             </div>
         </div>
 
@@ -60,3 +81,5 @@ include __DIR__ . '/partials/conversion_steps.php';
         </div>
     </form>
 </div>
+
+<script src="assets/js/service-conversion.js"></script>
