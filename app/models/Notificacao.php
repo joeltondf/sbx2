@@ -99,49 +99,85 @@ class Notificacao
         $tipoAlerta = trim($tipoAlerta) !== '' ? trim($tipoAlerta) : 'notificacao_generica';
         $grupoDestino = trim($grupoDestino) !== '' ? trim($grupoDestino) : 'gerencia';
 
-        $existing = $this->findOpenNotification($usuarioId, $tipoAlerta, $referenciaId, $grupoDestino);
-        if ($existing !== null) {
-            return $this->refreshExistingNotification(
-                $existing,
-                $mensagem,
-                $normalizedLink,
-                $tipoAlerta,
-                $referenciaId,
-                $grupoDestino
-            );
-        }
-
         $metadata = $this->getProcessMetadata($referenciaId);
         $now = $this->currentTimestampString();
         $priority = $this->determinePriority($tipoAlerta, $now, $metadata);
 
-        $sql = <<<SQL
-            INSERT INTO notificacoes (
-                usuario_id,
-                remetente_id,
-                mensagem,
-                link,
-                tipo_alerta,
-                referencia_id,
-                grupo_destino,
-                lida,
-                resolvido,
-                prioridade,
-                data_criacao
-            ) VALUES (
-                :usuario_id,
-                :remetente_id,
-                :mensagem,
-                :link,
-                :tipo_alerta,
-                :referencia_id,
-                :grupo_destino,
-                0,
-                0,
-                :prioridade,
-                :data_criacao
-            )
-        SQL;
+        $driver = $this->resolveDriver();
+
+        if ($driver === 'sqlite') {
+            $sql = <<<SQL
+                INSERT INTO notificacoes (
+                    usuario_id,
+                    remetente_id,
+                    mensagem,
+                    link,
+                    tipo_alerta,
+                    referencia_id,
+                    grupo_destino,
+                    lida,
+                    resolvido,
+                    prioridade,
+                    data_criacao
+                ) VALUES (
+                    :usuario_id,
+                    :remetente_id,
+                    :mensagem,
+                    :link,
+                    :tipo_alerta,
+                    :referencia_id,
+                    :grupo_destino,
+                    0,
+                    0,
+                    :prioridade,
+                    CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(usuario_id, tipo_alerta, referencia_id, grupo_destino) DO UPDATE SET
+                    remetente_id = excluded.remetente_id,
+                    mensagem = excluded.mensagem,
+                    link = excluded.link,
+                    lida = 0,
+                    resolvido = 0,
+                    prioridade = excluded.prioridade,
+                    data_criacao = CURRENT_TIMESTAMP
+            SQL;
+        } else {
+            $sql = <<<SQL
+                INSERT INTO notificacoes (
+                    usuario_id,
+                    remetente_id,
+                    mensagem,
+                    link,
+                    tipo_alerta,
+                    referencia_id,
+                    grupo_destino,
+                    lida,
+                    resolvido,
+                    prioridade,
+                    data_criacao
+                ) VALUES (
+                    :usuario_id,
+                    :remetente_id,
+                    :mensagem,
+                    :link,
+                    :tipo_alerta,
+                    :referencia_id,
+                    :grupo_destino,
+                    0,
+                    0,
+                    :prioridade,
+                    CURRENT_TIMESTAMP
+                )
+                ON DUPLICATE KEY UPDATE
+                    remetente_id = VALUES(remetente_id),
+                    mensagem = VALUES(mensagem),
+                    link = VALUES(link),
+                    lida = 0,
+                    resolvido = 0,
+                    prioridade = VALUES(prioridade),
+                    data_criacao = CURRENT_TIMESTAMP
+            SQL;
+        }
 
         try {
             $stmt = $this->pdo->prepare($sql);
@@ -153,7 +189,6 @@ class Notificacao
             $stmt->bindValue(':referencia_id', $referenciaId, PDO::PARAM_INT);
             $stmt->bindValue(':grupo_destino', $grupoDestino, PDO::PARAM_STR);
             $stmt->bindValue(':prioridade', $priority, PDO::PARAM_STR);
-            $stmt->bindValue(':data_criacao', $now, PDO::PARAM_STR);
 
             return $stmt->execute();
         } catch (PDOException $exception) {
@@ -990,7 +1025,6 @@ class Notificacao
             . 'AND tipo_alerta = :tipo_alerta '
             . 'AND referencia_id = :referencia_id '
             . 'AND grupo_destino = :grupo_destino '
-            . 'AND resolvido = 0 '
             . 'LIMIT 1'
         );
         $stmt->bindValue(':usuario_id', $usuarioId, PDO::PARAM_INT);
@@ -1004,39 +1038,13 @@ class Notificacao
         return $result !== false ? $result : null;
     }
 
-    private function refreshExistingNotification(
-        array $existing,
-        string $mensagem,
-        ?string $link,
-        string $tipoAlerta,
-        int $referenciaId,
-        string $grupoDestino
-    ): bool {
-        $metadata = $this->getProcessMetadata($referenciaId);
-        $now = $this->currentTimestampString();
-        $priority = $this->determinePriority($tipoAlerta, $now, $metadata);
-
-        $sql = 'UPDATE notificacoes SET '
-            . 'mensagem = :mensagem, '
-            . 'link = :link, '
-            . 'lida = 0, '
-            . 'resolvido = 0, '
-            . 'prioridade = :prioridade, '
-            . 'data_criacao = :data_criacao '
-            . 'WHERE id = :id';
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->bindValue(':mensagem', $mensagem, PDO::PARAM_STR);
-        if ($link === null || $link === '') {
-            $stmt->bindValue(':link', null, PDO::PARAM_NULL);
-        } else {
-            $stmt->bindValue(':link', $link, PDO::PARAM_STR);
+    private function resolveDriver(): string
+    {
+        try {
+            return (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        } catch (Throwable $exception) {
+            return 'mysql';
         }
-        $stmt->bindValue(':prioridade', $priority, PDO::PARAM_STR);
-        $stmt->bindValue(':data_criacao', $now, PDO::PARAM_STR);
-        $stmt->bindValue(':id', (int)$existing['id'], PDO::PARAM_INT);
-
-        return $stmt->execute();
     }
 
     private function syncPriorityForNotification(int $notificationId, string $priority): void

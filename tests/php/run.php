@@ -48,7 +48,8 @@ function buildNotificationTestSchema(PDO $pdo): void
         lida INTEGER NOT NULL DEFAULT 0,
         resolvido INTEGER NOT NULL DEFAULT 0,
         prioridade TEXT NOT NULL DEFAULT "media",
-        data_criacao TEXT NOT NULL
+        data_criacao TEXT NOT NULL,
+        UNIQUE (usuario_id, tipo_alerta, referencia_id, grupo_destino)
     )');
     $pdo->exec('CREATE TABLE processos (
         id INTEGER PRIMARY KEY,
@@ -226,7 +227,7 @@ runTest('Notificacao::criar evita duplicidade para alertas ativos', function ():
 
     $notificacaoModel = new Notificacao($pdo);
     $notificacaoModel->criar(1, null, 'Mensagem inicial', '/link', 'processo_pendente_orcamento', 100, 'gerencia');
-    $pdo->exec("UPDATE notificacoes SET data_criacao = '2023-01-01 00:00:00' WHERE id = 1");
+    $pdo->exec("UPDATE notificacoes SET data_criacao = '2023-01-01 00:00:00', lida = 1, resolvido = 1 WHERE id = 1");
     $notificacaoModel->criar(1, null, 'Mensagem atualizada', '/link2', 'processo_pendente_orcamento', 100, 'gerencia');
 
     $count = (int)$pdo->query('SELECT COUNT(*) FROM notificacoes')->fetchColumn();
@@ -237,6 +238,22 @@ runTest('Notificacao::criar evita duplicidade para alertas ativos', function ():
     assertEquals('/link2', $row['link']);
     assertEquals(0, (int)$row['lida']);
     assertEquals(0, (int)$row['resolvido']);
+}, $tests);
+
+runTest('Notificacao::criar mantém notificações distintas por grupo de destino', function (): void {
+    $pdo = new PDO('sqlite::memory:');
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    buildNotificationTestSchema($pdo);
+
+    $pdo->exec("INSERT INTO processos (id, status_processo, titulo) VALUES (101, 'Orçamento', 'Processo 101')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor'), (2, 'Analista')");
+
+    $model = new Notificacao($pdo);
+    $model->criar(1, null, 'Mensagem gerente', '/link', 'processo_pendente_orcamento', 101, 'gerencia');
+    $model->criar(2, null, 'Mensagem vendedor', '/link', 'processo_pendente_orcamento', 101, 'vendedor');
+
+    $count = (int)$pdo->query('SELECT COUNT(*) FROM notificacoes')->fetchColumn();
+    assertEquals(2, $count, 'As notificações com grupos distintos devem coexistir.');
 }, $tests);
 
 runTest('marcarComoLida propaga leitura para notificações relacionadas', function (): void {
