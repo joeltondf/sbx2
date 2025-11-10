@@ -259,9 +259,9 @@ class Notificacao
         }
     }
 
-    public function marcarComoLida(int $notificationId, int $usuarioId): bool
+    public function marcarComoLida(int $notificationId, int $usuarioId, array $options = []): bool
     {
-        $notification = $this->findNotificationById($notificationId, $usuarioId);
+        $notification = $this->findNotificationById($notificationId, $usuarioId, $options);
         if ($notification === null) {
             return false;
         }
@@ -269,14 +269,14 @@ class Notificacao
         return $this->updateNotificationsByReference($notification, ['lida' => 1]) > 0;
     }
 
-    public function marcarListaComoLida(array $notificationIds, int $usuarioId): int
+    public function marcarListaComoLida(array $notificationIds, int $usuarioId, array $options = []): int
     {
-        return $this->updateBatchByScope($notificationIds, $usuarioId, ['lida' => 1]);
+        return $this->updateBatchByScope($notificationIds, $usuarioId, ['lida' => 1], $options);
     }
 
-    public function marcarComoResolvida(int $notificationId, int $usuarioId): bool
+    public function marcarComoResolvida(int $notificationId, int $usuarioId, array $options = []): bool
     {
-        $notification = $this->findNotificationById($notificationId, $usuarioId);
+        $notification = $this->findNotificationById($notificationId, $usuarioId, $options);
         if ($notification === null) {
             return false;
         }
@@ -284,9 +284,9 @@ class Notificacao
         return $this->updateNotificationsByReference($notification, ['lida' => 1, 'resolvido' => 1]) > 0;
     }
 
-    public function marcarListaComoResolvida(array $notificationIds, int $usuarioId): int
+    public function marcarListaComoResolvida(array $notificationIds, int $usuarioId, array $options = []): int
     {
-        return $this->updateBatchByScope($notificationIds, $usuarioId, ['lida' => 1, 'resolvido' => 1]);
+        return $this->updateBatchByScope($notificationIds, $usuarioId, ['lida' => 1, 'resolvido' => 1], $options);
     }
 
     public function resolverPorReferencia(string $tipoAlerta, int $referenciaId, ?string $grupoDestino = null): void
@@ -685,23 +685,28 @@ class Notificacao
         return $latest;
     }
 
-    private function findNotificationById(int $notificationId, int $usuarioId): ?array
+    private function findNotificationById(int $notificationId, int $usuarioId, array $options = []): ?array
     {
+        $options = $this->normalizeUpdateOptions($options);
+
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM notificacoes WHERE id = :id AND usuario_id = :usuario_id LIMIT 1'
+            'SELECT * FROM notificacoes WHERE id = :id LIMIT 1'
         );
         $stmt->bindValue(':id', $notificationId, PDO::PARAM_INT);
-        $stmt->bindValue(':usuario_id', $usuarioId, PDO::PARAM_INT);
         $stmt->execute();
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $result !== false ? $result : null;
+        if ($result === false || !$this->notificationAccessible($result, $usuarioId, $options)) {
+            return null;
+        }
+
+        return $result;
     }
 
-    private function updateBatchByScope(array $notificationIds, int $usuarioId, array $fields): int
+    private function updateBatchByScope(array $notificationIds, int $usuarioId, array $fields, array $options = []): int
     {
-        $notifications = $this->loadNotificationsByIds($notificationIds, $usuarioId);
+        $notifications = $this->loadNotificationsByIds($notificationIds, $usuarioId, $options);
         if (empty($notifications)) {
             return 0;
         }
@@ -726,8 +731,9 @@ class Notificacao
         return $totalAffected;
     }
 
-    private function loadNotificationsByIds(array $ids, int $usuarioId): array
+    private function loadNotificationsByIds(array $ids, int $usuarioId, array $options = []): array
     {
+        $options = $this->normalizeUpdateOptions($options);
         $filteredIds = array_values(array_unique(array_map('intval', $ids)));
         $filteredIds = array_filter($filteredIds, static fn (int $id): bool => $id > 0);
 
@@ -736,16 +742,70 @@ class Notificacao
         }
 
         $placeholders = implode(', ', array_fill(0, count($filteredIds), '?'));
-        $sql = "SELECT * FROM notificacoes WHERE id IN ({$placeholders}) AND usuario_id = ?";
+        $sql = "SELECT * FROM notificacoes WHERE id IN ({$placeholders})";
 
         $stmt = $this->pdo->prepare($sql);
         foreach (array_values($filteredIds) as $index => $id) {
             $stmt->bindValue($index + 1, $id, PDO::PARAM_INT);
         }
-        $stmt->bindValue(count($filteredIds) + 1, $usuarioId, PDO::PARAM_INT);
         $stmt->execute();
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($results)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $results,
+            function (array $notification) use ($usuarioId, $options): bool {
+                return $this->notificationAccessible($notification, $usuarioId, $options);
+            }
+        ));
+    }
+
+    private function normalizeUpdateOptions(array $options): array
+    {
+        $normalized = [
+            'allow_group_scope' => !empty($options['allow_group_scope']),
+            'grupo_destino' => isset($options['grupo_destino']) ? trim((string)$options['grupo_destino']) : '',
+            'allowed_user_ids' => [],
+        ];
+
+        if (!empty($options['allowed_user_ids']) && is_array($options['allowed_user_ids'])) {
+            $normalized['allowed_user_ids'] = array_values(array_unique(array_map(
+                static fn ($value): int => (int)$value,
+                $options['allowed_user_ids']
+            )));
+        }
+
+        return $normalized;
+    }
+
+    private function notificationAccessible(array $notification, int $usuarioId, array $options): bool
+    {
+        if ((int)($notification['usuario_id'] ?? 0) === $usuarioId) {
+            return true;
+        }
+
+        if (!$options['allow_group_scope']) {
+            return false;
+        }
+
+        $grupoDestino = $options['grupo_destino'];
+        if ($grupoDestino === '') {
+            return false;
+        }
+
+        if (trim((string)($notification['grupo_destino'] ?? '')) !== $grupoDestino) {
+            return false;
+        }
+
+        if (!empty($options['allowed_user_ids'])) {
+            return in_array((int)($notification['usuario_id'] ?? 0), $options['allowed_user_ids'], true);
+        }
+
+        return true;
     }
 
     private function buildNotificationScopeKey(array $notification): string

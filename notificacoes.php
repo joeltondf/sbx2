@@ -17,12 +17,20 @@ $controller = new ProcessosController($pdo);
 // Ação padrão agora é exibir o painel de notificações
 $action = $_GET['action'] ?? 'painelNotificacoes';
 
+$perfil = $_SESSION['user_perfil'] ?? '';
+$grupoDestino = Notificacao::resolveGroupForProfile($perfil);
+$isManager = in_array($perfil, ['admin', 'gerencia', 'supervisor'], true);
+$updateOptions = [
+    'allow_group_scope' => $isManager,
+    'grupo_destino' => $grupoDestino,
+];
+
 switch ($action) {
     case 'markRead':
         $notificationId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
         if ($notificationId) {
             $notificacaoModel = new Notificacao($pdo);
-            if ($notificacaoModel->marcarComoLida($notificationId, (int)($_SESSION['user_id'] ?? 0))) {
+            if ($notificacaoModel->marcarComoLida($notificationId, (int)($_SESSION['user_id'] ?? 0), $updateOptions)) {
                 $_SESSION['success_message'] = 'Notificação marcada como lida.';
             } else {
                 $_SESSION['error_message'] = 'Não foi possível atualizar a notificação.';
@@ -34,7 +42,7 @@ switch ($action) {
         $notificationId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
         if ($notificationId) {
             $notificacaoModel = new Notificacao($pdo);
-            if ($notificacaoModel->marcarComoResolvida($notificationId, (int)($_SESSION['user_id'] ?? 0))) {
+            if ($notificacaoModel->marcarComoResolvida($notificationId, (int)($_SESSION['user_id'] ?? 0), $updateOptions)) {
                 $_SESSION['success_message'] = 'Notificação marcada como resolvida.';
             } else {
                 $_SESSION['error_message'] = 'Não foi possível atualizar a notificação.';
@@ -73,9 +81,9 @@ switch ($action) {
             $response = ['status' => 'error', 'message' => 'Selecione ao menos uma notificação.'];
         } else {
             if ($operation === 'mark_resolved') {
-                $updated = $notificacaoModel->marcarListaComoResolvida($ids, $userId);
+                $updated = $notificacaoModel->marcarListaComoResolvida($ids, $userId, $updateOptions);
             } elseif ($operation === 'mark_read') {
-                $updated = $notificacaoModel->marcarListaComoLida($ids, $userId);
+                $updated = $notificacaoModel->marcarListaComoLida($ids, $userId, $updateOptions);
             }
 
             if ($updated > 0) {

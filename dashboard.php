@@ -17,7 +17,14 @@ if (
 
     $notification_id = (int)$_GET['id'];
 
-    if ($notificacaoModel->marcarComoLida($notification_id, (int)($_SESSION['user_id'] ?? 0))) {
+    $perfil = $_SESSION['user_perfil'] ?? '';
+    $grupoDestino = Notificacao::resolveGroupForProfile($perfil);
+    $options = [
+        'allow_group_scope' => in_array($perfil, ['admin', 'gerencia', 'supervisor'], true),
+        'grupo_destino' => $grupoDestino,
+    ];
+
+    if ($notificacaoModel->marcarComoLida($notification_id, (int)($_SESSION['user_id'] ?? 0), $options)) {
         $_SESSION['success_message'] = "Notificação marcada como lida.";
     } else {
         $_SESSION['error_message'] = "Não foi possível atualizar a notificação.";
