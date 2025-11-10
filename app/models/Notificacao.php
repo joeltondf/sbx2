@@ -175,7 +175,15 @@ class Notificacao
         int $limit = 7,
         string $sourceTimezone = 'UTC'
     ): array {
-        return $this->fetchAlerts($usuarioId, $grupoDestino, $limit, true, $sourceTimezone);
+        $result = $this->getAlertFeed(
+            $usuarioId,
+            $grupoDestino,
+            $limit,
+            true,
+            $sourceTimezone
+        );
+
+        return $result['notifications'];
     }
 
     /**
