@@ -345,7 +345,7 @@ class Notificacao
                 p.data_finalizacao_real,
                 p.cliente_id,
                 c.nome_cliente,
-                u.nome AS destinatario_nome
+                u.nome_completo AS destinatario_nome
             FROM notificacoes AS n
             {$joins}
             WHERE {$conditions}
@@ -848,11 +848,11 @@ class Notificacao
     private function fetchDistinctUsuarios(string $where, array $params): array
     {
         $sql = <<<SQL
-            SELECT DISTINCT n.usuario_id AS id, u.nome AS nome
+            SELECT DISTINCT n.usuario_id AS id, u.nome_completo AS nome
             FROM notificacoes AS n
             LEFT JOIN users AS u ON u.id = n.usuario_id
             WHERE {$where}
-            ORDER BY COALESCE(u.nome, n.usuario_id)
+            ORDER BY COALESCE(u.nome_completo, n.usuario_id)
         SQL;
 
         $stmt = $this->pdo->prepare($sql);

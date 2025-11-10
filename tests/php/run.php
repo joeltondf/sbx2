@@ -66,7 +66,7 @@ function buildNotificationTestSchema(PDO $pdo): void
     )');
     $pdo->exec('CREATE TABLE users (
         id INTEGER PRIMARY KEY,
-        nome TEXT
+        nome_completo TEXT
     )');
 }
 
@@ -222,7 +222,7 @@ runTest('Notificacao::criar evita duplicidade para alertas ativos', function ():
     buildNotificationTestSchema($pdo);
 
     $pdo->exec("INSERT INTO processos (id, status_processo, titulo) VALUES (100, 'Orçamento', 'Processo 100')");
-    $pdo->exec("INSERT INTO users (id, nome) VALUES (1, 'Gestor')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor')");
 
     $notificacaoModel = new Notificacao($pdo);
     $notificacaoModel->criar(1, null, 'Mensagem inicial', '/link', 'processo_pendente_orcamento', 100, 'gerencia');
@@ -245,7 +245,7 @@ runTest('marcarComoLida propaga leitura para notificações relacionadas', funct
     buildNotificationTestSchema($pdo);
 
     $pdo->exec("INSERT INTO processos (id, status_processo, titulo) VALUES (200, 'Orçamento', 'Processo 200')");
-    $pdo->exec("INSERT INTO users (id, nome) VALUES (1, 'Gestor'), (2, 'Analista')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor'), (2, 'Analista')");
 
     $notificacaoModel = new Notificacao($pdo);
     $notificacaoModel->criar(1, null, 'Mensagem 1', '/link', 'processo_pendente_orcamento', 200, 'gerencia');
@@ -269,7 +269,7 @@ runTest('getAlertFeed aplica prioridades e filtros agrupados', function (): void
     $pdo->exec("INSERT INTO clientes (id, nome_cliente) VALUES (1, 'Cliente A')");
     $pdo->exec("INSERT INTO processos (id, status_processo, titulo, cliente_id) VALUES (300, 'Orçamento', 'Processo A', 1)");
     $pdo->exec("INSERT INTO processos (id, status_processo, titulo, cliente_id) VALUES (301, 'Concluído', 'Processo B', 1)");
-    $pdo->exec("INSERT INTO users (id, nome) VALUES (1, 'Gestor')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor')");
 
     $model = new Notificacao($pdo);
     $model->criar(1, null, 'Orçamento atrasado', '/a', 'processo_pendente_orcamento', 300, 'gerencia');

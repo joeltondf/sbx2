@@ -2134,7 +2134,7 @@ public function create($data, $files)
             SELECT 
                 p.*,
                 c.nome AS nome_cliente,
-                u.nome AS nome_usuario_criador
+                u.nome_completo AS nome_usuario_criador
             FROM 
                 processos p
             LEFT JOIN 
