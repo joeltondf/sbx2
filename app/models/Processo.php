@@ -14,11 +14,15 @@ class Processo
     private $pdo;
     private array $processColumns = [];
     private ?int $defaultVendorId = null;
+    private static bool $omieColumnsEnsured = false;
 
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
         $this->loadProcessColumns();
+        if ($this->ensureOmieIntegrationColumns()) {
+            $this->loadProcessColumns(true);
+        }
     }
 
     private function getDefaultVendorId(): ?int
@@ -82,9 +86,9 @@ class Processo
         return number_format((float)$value, 2, '.', '');
     }
 
-    private function loadProcessColumns(): void
+    private function loadProcessColumns(bool $forceReload = false): void
     {
-        if (!empty($this->processColumns)) {
+        if (!$forceReload && !empty($this->processColumns)) {
             return;
         }
 
@@ -96,6 +100,66 @@ class Processo
             $this->processColumns = [];
             error_log('Erro ao carregar colunas da tabela processos: ' . $exception->getMessage());
         }
+    }
+
+    private function ensureOmieIntegrationColumns(): bool
+    {
+        if (self::$omieColumnsEnsured) {
+            return false;
+        }
+
+        $columns = [
+            'codigo_pedido_integracao' => "ADD COLUMN codigo_pedido_integracao VARCHAR(50) DEFAULT NULL AFTER os_numero_conta_azul",
+            'etapa_faturamento_codigo' => "ADD COLUMN etapa_faturamento_codigo VARCHAR(10) DEFAULT NULL AFTER codigo_pedido_integracao",
+            'codigo_categoria' => "ADD COLUMN codigo_categoria VARCHAR(50) DEFAULT NULL AFTER etapa_faturamento_codigo",
+            'codigo_conta_corrente' => "ADD COLUMN codigo_conta_corrente BIGINT DEFAULT NULL AFTER codigo_categoria",
+            'codigo_cenario_fiscal' => "ADD COLUMN codigo_cenario_fiscal INT DEFAULT NULL AFTER codigo_conta_corrente",
+        ];
+
+        $indexes = [
+            'idx_processos_cod_pedido' => 'ADD INDEX idx_processos_cod_pedido (codigo_pedido_integracao)',
+            'idx_processos_cod_conta_corrente' => 'ADD INDEX idx_processos_cod_conta_corrente (codigo_conta_corrente)',
+        ];
+
+        $schemaUpdated = false;
+
+        try {
+            foreach ($columns as $column => $definition) {
+                if (!$this->hasProcessColumn($column)) {
+                    $this->pdo->exec('ALTER TABLE processos ' . $definition);
+                    $schemaUpdated = true;
+                }
+            }
+
+            foreach ($indexes as $indexName => $definition) {
+                if (!$this->indexExists('processos', $indexName)) {
+                    $this->pdo->exec('ALTER TABLE processos ' . $definition);
+                    $schemaUpdated = true;
+                }
+            }
+
+            self::$omieColumnsEnsured = true;
+            return $schemaUpdated;
+        } catch (PDOException $exception) {
+            error_log('Falha ao sincronizar colunas da integração Omie: ' . $exception->getMessage());
+        }
+
+        return false;
+    }
+
+    private function indexExists(string $table, string $indexName): bool
+    {
+        try {
+            $query = sprintf('SHOW INDEX FROM `%s` WHERE Key_name = :indexName', $table);
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute(['indexName' => $indexName]);
+
+            return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $exception) {
+            error_log('Erro ao verificar índice da tabela processos: ' . $exception->getMessage());
+        }
+
+        return false;
     }
 
     private function hasProcessColumn(string $column): bool
