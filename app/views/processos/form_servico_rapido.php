@@ -110,7 +110,7 @@ if (!empty($formData['categorias_servico'])) {
         $categoriasSelecionadas = array_filter(array_map('trim', explode(',', (string) $formData['categorias_servico'])));
     }
 }
-$prazoTipoSelecionado = $formData['prazo_tipo'] ?? 'dias';
+// Removido: prazo é sempre em dias agora
 
 
 ?>
@@ -216,22 +216,9 @@ $prazoTipoSelecionado = $formData['prazo_tipo'] ?? 'dias';
                 <label for="data_inicio_traducao" class="block text-sm font-medium text-gray-700">Data de Envio para Tradutor</label>
                 <input type="date" name="data_inicio_traducao" id="data_inicio_traducao" value="<?php echo htmlspecialchars($formData['data_inicio_traducao'] ?? date('Y-m-d')); ?>" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
             </div>
-            <div class="md:col-span-1">
-                <label for="prazo_tipo" class="block text-sm font-medium text-gray-700">Definir Prazo Para Serviço</label>
-                <select name="prazo_tipo" id="prazo_tipo" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                    <option value="dias" <?php echo ($prazoTipoSelecionado === 'dias') ? 'selected' : ''; ?>>Por Dias</option>
-                    <option value="data" <?php echo ($prazoTipoSelecionado === 'data') ? 'selected' : ''; ?>>Por Data</option>
-                </select>
-            </div>
-            <div class="md:col-span-1">
-                <div id="prazo_dias_container" class="<?php echo ($prazoTipoSelecionado === 'data') ? 'hidden' : ''; ?>">
-                    <label for="traducao_prazo_dias" class="block text-sm font-medium text-gray-700">Quantidade de Dias Corridos</label>
-                    <input type="number" name="traducao_prazo_dias" id="traducao_prazo_dias" placeholder="Ex: 5" value="<?php echo htmlspecialchars($formData['traducao_prazo_dias'] ?? ''); ?>" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" <?php echo ($prazoTipoSelecionado === 'data') ? 'disabled' : ''; ?>>
-                </div>
-                <div id="prazo_data_container" class="<?php echo ($prazoTipoSelecionado === 'data') ? '' : 'hidden'; ?>">
-                    <label for="traducao_prazo_data" class="block text-sm font-medium text-gray-700">Data da Entrega</label>
-                    <input type="date" name="traducao_prazo_data" id="traducao_prazo_data" value="<?php echo htmlspecialchars($formData['traducao_prazo_data'] ?? ''); ?>" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm" <?php echo ($prazoTipoSelecionado === 'data') ? '' : 'disabled'; ?>>
-                </div>
+            <div class="md:col-span-2">
+                <label for="prazo_dias" class="block text-sm font-medium text-gray-700">Prazo de Entrega (Dias Corridos)</label>
+                <input type="number" name="prazo_dias" id="prazo_dias" min="1" placeholder="Ex: 5" value="<?php echo htmlspecialchars($formData['prazo_dias'] ?? $formData['traducao_prazo_dias'] ?? ''); ?>" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
             </div>
         </div>
     </fieldset>
@@ -710,9 +697,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let clienteCache = { tipo: 'À vista', servicos: [] };
     const billingTypeSelect = document.getElementById('billing_type');
     const billingSections = document.querySelectorAll('[data-billing-section]');
-    const prazoTipoSelect = document.getElementById('prazo_tipo');
-    const prazoDiasInput = document.getElementById('traducao_prazo_dias');
-    const prazoDataInput = document.getElementById('traducao_prazo_data');
+    const prazoDiasInput = document.getElementById('prazo_dias');
     let currentDeadlineDays = (() => {
         if (!prazoDiasInput) {
             return null;
@@ -1369,42 +1354,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // Gatilho inicial de cálculos e status
     updateAllCalculations();
     evaluateValorMinimo();
-
-    const togglePrazoFields = () => {
-        const diasContainer = document.getElementById('prazo_dias_container');
-        const dataContainer = document.getElementById('prazo_data_container');
-
-        if (!diasContainer || !dataContainer) {
-            return;
-        }
-
-        if (prazoTipoSelect && prazoTipoSelect.value === 'data') {
-            diasContainer.classList.add('hidden');
-            dataContainer.classList.remove('hidden');
-            if (prazoDiasInput) {
-                prazoDiasInput.setAttribute('disabled', 'disabled');
-            }
-            if (prazoDataInput) {
-                prazoDataInput.removeAttribute('disabled');
-            }
-            return;
-        }
-
-        dataContainer.classList.add('hidden');
-        diasContainer.classList.remove('hidden');
-        if (prazoDataInput) {
-            prazoDataInput.setAttribute('disabled', 'disabled');
-        }
-        if (prazoDiasInput) {
-            prazoDiasInput.removeAttribute('disabled');
-            prazoDiasInput.value = currentDeadlineDays !== null ? currentDeadlineDays : '';
-        }
-    };
-
-    if (prazoTipoSelect) {
-        prazoTipoSelect.addEventListener('change', togglePrazoFields);
-        togglePrazoFields();
-    }
 
     if (prazoDiasInput) {
         prazoDiasInput.addEventListener('input', () => {
