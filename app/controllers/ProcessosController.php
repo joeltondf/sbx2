@@ -1269,13 +1269,127 @@ class ProcessosController
         }
 
         $grupoDestino = Notificacao::resolveGroupForProfile($_SESSION['user_perfil'] ?? '');
-        $alertFeed = $this->notificacaoModel->getAlertFeed($usuarioId, $grupoDestino, 100, true, 'UTC');
+        $isManager = in_array($_SESSION['user_perfil'] ?? '', ['admin', 'gerencia', 'supervisor'], true);
+
+        $filters = $this->parseNotificationFilters($_GET ?? []);
+        $selectedUser = $filters['usuario'] ?? null;
+        $viewAllUsers = $isManager && $selectedUser === 'todos';
+
+        if ($viewAllUsers) {
+            unset($filters['usuario']);
+        }
+
+        $includeGroup = $isManager && ($viewAllUsers || ($selectedUser !== null && $selectedUser !== ''));
+
+        $options = [
+            'filters' => $filters,
+            'grouped' => true,
+            'include_group' => $includeGroup,
+        ];
+
+        $alertFeed = $this->notificacaoModel->getAlertFeed($usuarioId, $grupoDestino, 100, false, 'UTC', $options);
+        $filterOptions = $this->notificacaoModel->getFilterOptions($usuarioId, $grupoDestino, $includeGroup);
 
         $this->render('painel_notificacoes', [
             'alertFeed' => $alertFeed,
             'grupoDestino' => $grupoDestino,
             'pageTitle' => $pageTitle,
+            'filterOptions' => $filterOptions,
+            'appliedFilters' => $this->normalizeAppliedFilters($filters, $viewAllUsers ? 'todos' : $selectedUser),
+            'isManager' => $isManager,
         ]);
+    }
+
+    private function parseNotificationFilters(array $input): array
+    {
+        $filters = [];
+
+        $status = $this->sanitizeFilterString($input['status'] ?? 'aberto');
+        $filters['status'] = $status !== '' ? $status : 'aberto';
+
+        if (!empty($input['tipo'])) {
+            $filters['tipo'] = $this->normalizeFilterArray($input['tipo']);
+        }
+
+        if (!empty($input['prioridade'])) {
+            $filters['prioridade'] = $this->normalizeFilterArray($input['prioridade']);
+        }
+
+        if (!empty($input['status_processo'])) {
+            $filters['status_processo'] = $this->normalizeFilterArray($input['status_processo']);
+        }
+
+        if (!empty($input['cliente_id'])) {
+            $filters['cliente_id'] = (int)$input['cliente_id'];
+        }
+
+        if (!empty($input['usuario'])) {
+            $usuario = $this->sanitizeFilterString($input['usuario']);
+            if ($usuario !== '') {
+                $filters['usuario'] = $usuario;
+            }
+        }
+
+        if (!empty($input['periodo_inicio'])) {
+            $data = $this->sanitizeDate($input['periodo_inicio']);
+            if ($data !== null) {
+                $filters['periodo_inicio'] = $data . ' 00:00:00';
+            }
+        }
+
+        if (!empty($input['periodo_fim'])) {
+            $data = $this->sanitizeDate($input['periodo_fim']);
+            if ($data !== null) {
+                $filters['periodo_fim'] = $data . ' 23:59:59';
+            }
+        }
+
+        return $filters;
+    }
+
+    private function normalizeAppliedFilters(array $filters, $selectedUser): array
+    {
+        return [
+            'status' => $filters['status'] ?? 'aberto',
+            'tipo' => $filters['tipo'] ?? [],
+            'prioridade' => $filters['prioridade'] ?? [],
+            'status_processo' => $filters['status_processo'] ?? [],
+            'cliente_id' => $filters['cliente_id'] ?? '',
+            'periodo_inicio' => isset($filters['periodo_inicio']) ? substr($filters['periodo_inicio'], 0, 10) : '',
+            'periodo_fim' => isset($filters['periodo_fim']) ? substr($filters['periodo_fim'], 0, 10) : '',
+            'usuario' => $selectedUser ?? '',
+        ];
+    }
+
+    private function normalizeFilterArray($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map(fn ($item) => $this->sanitizeFilterString($item), $value)));
+        }
+
+        $sanitized = $this->sanitizeFilterString($value);
+
+        return $sanitized === '' ? [] : [$sanitized];
+    }
+
+    private function sanitizeFilterString($value): string
+    {
+        return trim((string)$value);
+    }
+
+    private function sanitizeDate($value): ?string
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+
+        $date = \DateTime::createFromFormat('Y-m-d', $value);
+        if ($date === false) {
+            return null;
+        }
+
+        return $date->format('Y-m-d');
     }
 
     /**
