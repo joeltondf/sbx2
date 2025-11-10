@@ -27,27 +27,50 @@ $appliedFilters = $appliedFilters ?? [
     'periodo_fim' => '',
     'usuario' => '',
 ];
+$hasAdvancedFilters = !empty($appliedFilters['tipo'])
+    || !empty($appliedFilters['prioridade'])
+    || !empty($appliedFilters['status_processo'])
+    || (!empty($appliedFilters['usuario']) && $appliedFilters['usuario'] !== '');
 
-if (!function_exists('format_alert_type_label')) {
-    function format_alert_type_label(string $alertType): string
+if (!function_exists('notification_type_metadata')) {
+    function notification_type_metadata(?string $alertType): array
     {
-        $map = [
-            'processo_pendente_orcamento' => 'Orçamento pendente',
-            'processo_pendente_servico' => 'Serviço pendente',
-            'processo_orcamento_recusado' => 'Orçamento recusado',
-            'processo_orcamento_enviado' => 'Orçamento enviado',
-            'processo_servico_pendente' => 'Serviço aguardando execução',
-            'processo_cancelado' => 'Processo cancelado',
-            'processo_servico_aprovado' => 'Serviço aprovado',
-            'processo_orcamento_aprovado' => 'Orçamento aprovado',
-            'processo_orcamento_cancelado' => 'Orçamento cancelado',
-            'prospeccao_exclusao' => 'Solicitação de exclusão',
-            'prospeccao_generica' => 'Prospeção',
-            'processo_generico' => 'Processo',
-            'notificacao_generica' => 'Alerta',
+        $alertType = strtolower(trim((string)$alertType));
+        $baseMap = [
+            'processo_pendente_orcamento' => ['label' => 'Orçamento pendente', 'classes' => 'bg-indigo-100 text-indigo-700 border border-indigo-200'],
+            'processo_pendente_servico' => ['label' => 'Serviço pendente', 'classes' => 'bg-blue-100 text-blue-700 border border-blue-200'],
+            'processo_servico_pendente' => ['label' => 'Serviço aguardando execução', 'classes' => 'bg-blue-100 text-blue-700 border border-blue-200'],
+            'processo_orcamento_recusado' => ['label' => 'Orçamento recusado', 'classes' => 'bg-red-100 text-red-700 border border-red-200'],
+            'processo_orcamento_enviado' => ['label' => 'Orçamento enviado', 'classes' => 'bg-cyan-100 text-cyan-700 border border-cyan-200'],
+            'processo_servico_aprovado' => ['label' => 'Serviço aprovado', 'classes' => 'bg-emerald-100 text-emerald-700 border border-emerald-200'],
+            'processo_orcamento_aprovado' => ['label' => 'Orçamento aprovado', 'classes' => 'bg-emerald-100 text-emerald-700 border border-emerald-200'],
+            'processo_cancelado' => ['label' => 'Processo cancelado', 'classes' => 'bg-slate-200 text-slate-700 border border-slate-300'],
+            'processo_orcamento_cancelado' => ['label' => 'Orçamento cancelado', 'classes' => 'bg-slate-200 text-slate-700 border border-slate-300'],
+            'prospeccao_exclusao' => ['label' => 'Solicitação de exclusão', 'classes' => 'bg-rose-100 text-rose-700 border border-rose-200'],
+            'prospeccao_generica' => ['label' => 'Prospecção', 'classes' => 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200'],
+            'processo_generico' => ['label' => 'Processo', 'classes' => 'bg-amber-100 text-amber-700 border border-amber-200'],
+            'notificacao_generica' => ['label' => 'Alerta', 'classes' => 'bg-amber-100 text-amber-700 border border-amber-200'],
         ];
 
-        return $map[$alertType] ?? ucfirst(str_replace('_', ' ', $alertType));
+        if (isset($baseMap[$alertType])) {
+            return $baseMap[$alertType];
+        }
+
+        $label = ucfirst(str_replace('_', ' ', $alertType ?: 'alerta'));
+
+        return [
+            'label' => $label,
+            'classes' => 'bg-slate-100 text-slate-700 border border-slate-200',
+        ];
+    }
+}
+
+if (!function_exists('notification_type_label')) {
+    function notification_type_label(string $alertType): string
+    {
+        $metadata = notification_type_metadata($alertType);
+
+        return $metadata['label'] ?? ucfirst(str_replace('_', ' ', $alertType));
     }
 }
 
@@ -81,120 +104,148 @@ if (!function_exists('notification_priority_metadata')) {
         </p>
     </div>
 
-    <form method="GET" action="<?php echo APP_URL; ?>/notificacoes.php" class="bg-white shadow rounded-lg p-6 space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-                <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-                <select id="status" name="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    <?php
-                        $statusOptions = [
-                            'aberto' => 'Abertas',
-                            'nao_lido' => 'Não lidas',
-                            'lido' => 'Lidas',
-                            'resolvido' => 'Resolvidas',
-                            'todos' => 'Todas',
-                        ];
-                        $currentStatus = $appliedFilters['status'] ?? 'aberto';
-                        foreach ($statusOptions as $value => $label):
-                    ?>
-                        <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $currentStatus === $value ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($label); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label for="cliente_id" class="block text-sm font-medium text-gray-700">Cliente</label>
-                <select id="cliente_id" name="cliente_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    <option value="">Todos</option>
-                    <?php foreach ($filterOptions['clientes'] as $cliente): ?>
-                        <option value="<?php echo (int)$cliente['id']; ?>" <?php echo ((string)($appliedFilters['cliente_id'] ?? '') === (string)$cliente['id']) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($cliente['label']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label for="periodo_inicio" class="block text-sm font-medium text-gray-700">Período inicial</label>
-                <input
-                    type="date"
-                    id="periodo_inicio"
-                    name="periodo_inicio"
-                    value="<?php echo htmlspecialchars($appliedFilters['periodo_inicio'] ?? ''); ?>"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+    <form method="GET" action="<?php echo APP_URL; ?>/notificacoes.php" class="bg-white shadow rounded-lg p-6 space-y-6">
+        <div>
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filtros principais</h2>
+                <button
+                    type="button"
+                    class="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 focus:outline-none"
+                    data-toggle-advanced
+                    aria-expanded="<?php echo $hasAdvancedFilters ? 'true' : 'false'; ?>"
+                    aria-controls="advanced-filters"
                 >
+                    <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 01.8 1.6l-4.2 5.6V16a1 1 0 01-1.447.894l-3-1.5A1 1 0 017 14.5v-3.3L2.2 5.6A1 1 0 013 5z" clip-rule="evenodd" />
+                    </svg>
+                    <span data-toggle-label><?php echo $hasAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'; ?></span>
+                </button>
             </div>
 
-            <div>
-                <label for="periodo_fim" class="block text-sm font-medium text-gray-700">Período final</label>
-                <input
-                    type="date"
-                    id="periodo_fim"
-                    name="periodo_fim"
-                    value="<?php echo htmlspecialchars($appliedFilters['periodo_fim'] ?? ''); ?>"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
-                >
-            </div>
-
-            <div>
-                <label for="tipo" class="block text-sm font-medium text-gray-700">Tipo de alerta</label>
-                <select id="tipo" name="tipo[]" multiple class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    <?php foreach ($filterOptions['tipos'] as $tipo): ?>
-                        <option value="<?php echo htmlspecialchars($tipo); ?>" <?php echo in_array($tipo, $appliedFilters['tipo'] ?? [], true) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars(format_alert_type_label($tipo)); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <p class="mt-1 text-xs text-gray-500">Pressione Ctrl (ou Cmd) para selecionar múltiplos.</p>
-            </div>
-
-            <div>
-                <label for="prioridade" class="block text-sm font-medium text-gray-700">Prioridade</label>
-                <select id="prioridade" name="prioridade[]" multiple class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    <?php foreach (['alta' => 'Alta', 'media' => 'Média', 'baixa' => 'Baixa'] as $value => $label): ?>
-                        <option value="<?php echo htmlspecialchars($value); ?>" <?php echo in_array($value, $appliedFilters['prioridade'] ?? [], true) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($label); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div>
-                <label for="status_processo" class="block text-sm font-medium text-gray-700">Status do processo</label>
-                <select id="status_processo" name="status_processo[]" multiple class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                    <?php foreach ($filterOptions['status'] as $statusProcesso): ?>
-                        <option value="<?php echo htmlspecialchars($statusProcesso); ?>" <?php echo in_array($statusProcesso, $appliedFilters['status_processo'] ?? [], true) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($statusProcesso); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <?php if ($isManager): ?>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                    <label for="usuario" class="block text-sm font-medium text-gray-700">Destinatário</label>
-                    <select id="usuario" name="usuario" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
-                        <option value="">Meus alertas</option>
-                        <option value="todos" <?php echo ($appliedFilters['usuario'] ?? '') === 'todos' ? 'selected' : ''; ?>>Todos do grupo</option>
-                        <?php foreach ($filterOptions['usuarios'] as $usuario): ?>
-                            <option value="<?php echo htmlspecialchars((string)$usuario['id']); ?>" <?php echo ((string)($appliedFilters['usuario'] ?? '') === (string)$usuario['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($usuario['label']); ?>
+                    <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+                    <select id="status" name="status" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <?php
+                            $statusOptions = [
+                                'aberto' => 'Abertas',
+                                'nao_lido' => 'Não lidas',
+                                'lido' => 'Lidas',
+                                'resolvido' => 'Resolvidas',
+                                'todos' => 'Todas',
+                            ];
+                            $currentStatus = $appliedFilters['status'] ?? 'aberto';
+                            foreach ($statusOptions as $value => $label):
+                        ?>
+                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $currentStatus === $value ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($label); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-            <?php endif; ?>
+
+                <div>
+                    <label for="cliente_id" class="block text-sm font-medium text-gray-700">Cliente</label>
+                    <select id="cliente_id" name="cliente_id" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <option value="">Todos</option>
+                        <?php foreach ($filterOptions['clientes'] as $cliente): ?>
+                            <option value="<?php echo (int)$cliente['id']; ?>" <?php echo ((string)($appliedFilters['cliente_id'] ?? '') === (string)$cliente['id']) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($cliente['label']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="periodo_inicio" class="block text-sm font-medium text-gray-700">Período inicial</label>
+                    <input
+                        type="date"
+                        id="periodo_inicio"
+                        name="periodo_inicio"
+                        value="<?php echo htmlspecialchars($appliedFilters['periodo_inicio'] ?? ''); ?>"
+                        class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    >
+                </div>
+
+                <div>
+                    <label for="periodo_fim" class="block text-sm font-medium text-gray-700">Período final</label>
+                    <input
+                        type="date"
+                        id="periodo_fim"
+                        name="periodo_fim"
+                        value="<?php echo htmlspecialchars($appliedFilters['periodo_fim'] ?? ''); ?>"
+                        class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                    >
+                </div>
+            </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3 pt-2">
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                Aplicar filtros
-            </button>
-            <a href="<?php echo APP_URL; ?>/notificacoes.php" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                Limpar filtros
-            </a>
+        <div id="advanced-filters" class="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4<?php echo $hasAdvancedFilters ? '' : ' hidden'; ?>" data-advanced-container>
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-600">Filtros avançados</h3>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                    <label for="tipo" class="block text-sm font-medium text-gray-700">Tipo de alerta</label>
+                    <select id="tipo" name="tipo[]" multiple size="5" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <?php foreach ($filterOptions['tipos'] as $tipo): ?>
+                            <option value="<?php echo htmlspecialchars($tipo); ?>" <?php echo in_array($tipo, $appliedFilters['tipo'] ?? [], true) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars(notification_type_label($tipo)); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Use Ctrl (ou Cmd) para selecionar múltiplos tipos.</p>
+                </div>
+
+                <div>
+                    <label for="prioridade" class="block text-sm font-medium text-gray-700">Prioridade</label>
+                    <select id="prioridade" name="prioridade[]" multiple size="4" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <?php foreach (['alta' => 'Alta', 'media' => 'Média', 'baixa' => 'Baixa'] as $value => $label): ?>
+                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo in_array($value, $appliedFilters['prioridade'] ?? [], true) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($label); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="status_processo" class="block text-sm font-medium text-gray-700">Status do processo</label>
+                    <select id="status_processo" name="status_processo[]" multiple size="5" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                        <?php foreach ($filterOptions['status'] as $statusProcesso): ?>
+                            <option value="<?php echo htmlspecialchars($statusProcesso); ?>" <?php echo in_array($statusProcesso, $appliedFilters['status_processo'] ?? [], true) ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($statusProcesso); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <?php if ($isManager): ?>
+                    <div>
+                        <label for="usuario" class="block text-sm font-medium text-gray-700">Destinatário</label>
+                        <select id="usuario" name="usuario" class="mt-1 block w-full rounded-md border-gray-200 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm">
+                            <option value="">Meus alertas</option>
+                            <option value="todos" <?php echo ($appliedFilters['usuario'] ?? '') === 'todos' ? 'selected' : ''; ?>>Todos do grupo</option>
+                            <?php foreach ($filterOptions['usuarios'] as $usuario): ?>
+                                <option value="<?php echo htmlspecialchars((string)$usuario['id']); ?>" <?php echo ((string)($appliedFilters['usuario'] ?? '') === (string)$usuario['id']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($usuario['label']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-xs text-gray-500">
+                Combine os filtros para refinar a visualização das notificações.
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    Aplicar filtros
+                </button>
+                <a href="<?php echo APP_URL; ?>/notificacoes.php" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    Limpar filtros
+                </a>
+            </div>
         </div>
     </form>
 
@@ -294,6 +345,7 @@ if (!function_exists('notification_priority_metadata')) {
                                                 $link = $notification['link'] ?? '#';
                                                 $displayDate = $notification['display_date'] ?? '';
                                                 $alertType = $notification['tipo_alerta'] ?? 'notificacao_generica';
+                                                $typeMeta = notification_type_metadata($alertType);
                                                 $isRead = !empty($notification['lida']);
                                                 $rowClasses = $isRead ? 'bg-white' : 'bg-yellow-50';
                                                 $referenceId = (int)($notification['referencia_id'] ?? 0);
@@ -312,8 +364,8 @@ if (!function_exists('notification_priority_metadata')) {
                                                     <?php echo htmlspecialchars($notification['mensagem'] ?? ''); ?>
                                                 </td>
                                                 <td class="px-4 py-3 text-sm">
-                                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
-                                                        <?php echo htmlspecialchars(format_alert_type_label($alertType)); ?>
+                                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <?php echo $typeMeta['classes']; ?>">
+                                                        <?php echo htmlspecialchars($typeMeta['label']); ?>
                                                     </span>
                                                 </td>
                                                 <td class="px-4 py-3 text-sm text-gray-600">
@@ -423,6 +475,21 @@ if (!function_exists('notification_priority_metadata')) {
             checkboxes.forEach((checkbox) => {
                 checkbox.checked = shouldSelectAll;
             });
+        });
+    }
+
+    const advancedToggle = document.querySelector('[data-toggle-advanced]');
+    const advancedContainer = document.querySelector('[data-advanced-container]');
+    if (advancedToggle && advancedContainer) {
+        const label = advancedToggle.querySelector('[data-toggle-label]');
+
+        advancedToggle.addEventListener('click', () => {
+            const isHidden = advancedContainer.classList.toggle('hidden');
+            const isOpen = !isHidden;
+            advancedToggle.setAttribute('aria-expanded', String(isOpen));
+            if (label) {
+                label.textContent = isOpen ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados';
+            }
         });
     }
 })();
