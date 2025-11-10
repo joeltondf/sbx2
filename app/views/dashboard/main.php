@@ -174,7 +174,7 @@ if (!function_exists('dashboard_calculate_deadline_context')) {
         } else {
             $deadline = null;
 
-            $rawDate = $processo['traducao_prazo_data'] ?? null;
+            $rawDate = $processo['data_previsao_entrega'] ?? null;
             if (!empty($rawDate)) {
                 try {
                     $deadline = new DateTimeImmutable((string) $rawDate);
@@ -1031,11 +1031,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } else {
-            let deadline = buildDateOnly(processo.traducao_prazo_data);
+            let deadline = buildDateOnly(processo.data_previsao_entrega);
 
             if (!deadline && processo.traducao_prazo_dias && processo.data_inicio_traducao) {
                 const start = buildDateOnly(processo.data_inicio_traducao);
                 const addDays = parseInt(processo.traducao_prazo_dias, 10);
+
+                if (start && !Number.isNaN(addDays)) {
+                    deadline = new Date(start);
+                    deadline.setDate(deadline.getDate() + addDays);
+                }
+            }
+
+            if (!deadline && processo.prazo_dias && processo.data_inicio_traducao) {
+                const start = buildDateOnly(processo.data_inicio_traducao);
+                const addDays = parseInt(processo.prazo_dias, 10);
 
                 if (start && !Number.isNaN(addDays)) {
                     deadline = new Date(start);

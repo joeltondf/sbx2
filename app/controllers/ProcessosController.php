@@ -748,20 +748,11 @@ class ProcessosController
                 $payload['traducao_prazo_dias'] = $prazoDias;
             }
 
-            $explicitDeadline = $this->normalizeDateInput($payload['traducao_prazo_data'] ?? $payload['data_previsao_entrega'] ?? null);
-            if ($explicitDeadline !== null) {
-                $payload['traducao_prazo_data'] = $explicitDeadline;
-                $payload['data_previsao_entrega'] = $explicitDeadline;
-            }
-
             $deadline = $this->determineEffectiveDeadline($processo, array_merge($processo, $payload));
             if ($deadline !== null) {
-                $deadlineString = $deadline->format('Y-m-d');
-                $payload['data_previsao_entrega'] = $deadlineString;
-                $payload['traducao_prazo_data'] = $deadlineString;
+                $payload['data_previsao_entrega'] = $deadline->format('Y-m-d');
             } else {
                 $payload['data_previsao_entrega'] = null;
-                $payload['traducao_prazo_data'] = null;
             }
 
             if ($this->processoModel->updateEtapas($id, $payload)) {
@@ -968,7 +959,6 @@ class ProcessosController
             'data_inicio_traducao' => $process['data_inicio_traducao'] ?? date('Y-m-d'),
             'prazo_dias' => $process['prazo_dias'] ?? '',
             'traducao_prazo_dias' => $process['traducao_prazo_dias'] ?? ($process['prazo_dias'] ?? ''),
-            'traducao_prazo_data' => $process['traducao_prazo_data'] ?? $process['data_previsao_entrega'] ?? '',
             'data_previsao_entrega' => $process['data_previsao_entrega'] ?? '',
         ];
 
@@ -980,8 +970,6 @@ class ProcessosController
 
                 $prazoDias = $this->normalizePrazoDiasInput($_POST['prazo_dias'] ?? $_POST['traducao_prazo_dias'] ?? null);
                 $dataInicio = $this->normalizeDateInput($_POST['data_inicio_traducao'] ?? null);
-                $explicitDeadline = $this->normalizeDateInput($_POST['traducao_prazo_data'] ?? $_POST['data_previsao_entrega'] ?? null);
-
                 $payload = [
                     'data_inicio_traducao' => $dataInicio,
                     'prazo_dias' => $prazoDias,
@@ -991,19 +979,12 @@ class ProcessosController
                     $payload['traducao_prazo_dias'] = $prazoDias;
                 }
 
-                if ($explicitDeadline !== null) {
-                    $payload['traducao_prazo_data'] = $explicitDeadline;
-                    $payload['data_previsao_entrega'] = $explicitDeadline;
-                }
-
                 $deadline = $this->determineEffectiveDeadline($process, array_merge($process, $payload));
                 if ($deadline !== null) {
                     $deadlineString = $deadline->format('Y-m-d');
                     $payload['data_previsao_entrega'] = $deadlineString;
-                    $payload['traducao_prazo_data'] = $deadlineString;
                 } else {
                     $payload['data_previsao_entrega'] = null;
-                    $payload['traducao_prazo_data'] = null;
                 }
 
                 if (!$this->processoModel->updateFromLeadConversion($processId, $payload)) {
@@ -2404,7 +2385,6 @@ class ProcessosController
             || isset($input['data_inicio_traducao'])
             || array_key_exists('prazo_dias', $input)
             || array_key_exists('traducao_prazo_dias', $input)
-            || array_key_exists('traducao_prazo_data', $input)
             || array_key_exists('data_previsao_entrega', $input);
         if ($validarPrazo) {
             $dataInicio = $input['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
@@ -2428,15 +2408,7 @@ class ProcessosController
                 ?? $processo['traducao_prazo_dias']
                 ?? null;
             $dias = $this->normalizePrazoDiasInput($rawPrazoDias);
-            $hasExplicitDeadline = $this->normalizeDateInput(
-                $input['traducao_prazo_data']
-                    ?? $input['data_previsao_entrega']
-                    ?? $processo['traducao_prazo_data']
-                    ?? $processo['data_previsao_entrega']
-                    ?? null
-            );
-
-            if (($dias === null || $dias < 1) && $hasExplicitDeadline === null) {
+            if ($dias === null || $dias < 1) {
                 throw new InvalidArgumentException('Informe a quantidade de dias do prazo de tradução.');
             }
         }
@@ -2590,14 +2562,6 @@ class ProcessosController
             ?? null;
         $prazoDias = $this->normalizePrazoDiasInput($rawPrazoDias);
 
-        $explicitDeadline = $this->normalizeDateInput(
-            $input['traducao_prazo_data']
-                ?? $input['data_previsao_entrega']
-                ?? $processo['traducao_prazo_data']
-                ?? $processo['data_previsao_entrega']
-                ?? null
-        );
-
         $valorTotal = $this->parseCurrencyValue($input['valor_total'] ?? ($processo['valor_total'] ?? null));
         $valorEntrada = $this->parseCurrencyValue($input['valor_entrada'] ?? ($processo['orcamento_valor_entrada'] ?? null));
 
@@ -2654,18 +2618,11 @@ class ProcessosController
             $dados['traducao_prazo_dias'] = $prazoDias;
         }
 
-        if ($explicitDeadline !== null) {
-            $dados['traducao_prazo_data'] = $explicitDeadline;
-            $dados['data_previsao_entrega'] = $explicitDeadline;
-        }
-
         $deadline = $this->determineEffectiveDeadline($processo, $dados);
         if ($deadline !== null) {
             $deadlineString = $deadline->format('Y-m-d');
-            $dados['traducao_prazo_data'] = $deadlineString;
             $dados['data_previsao_entrega'] = $deadlineString;
         } else {
-            $dados['traducao_prazo_data'] = null;
             $dados['data_previsao_entrega'] = null;
         }
 
@@ -3142,7 +3099,7 @@ class ProcessosController
             return '<span class="font-bold text-indigo-600">Prazo pausado</span>';
         }
 
-        return $this->getPrazoCountdown($processo['traducao_prazo_data'] ?? null);
+        return $this->getPrazoCountdown($processo['data_previsao_entrega'] ?? null);
     }
 
     /**

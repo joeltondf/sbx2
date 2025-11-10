@@ -549,7 +549,6 @@ public function create($data, $files)
             'data_inicio_traducao',
             'prazo_dias',
             'traducao_prazo_dias',
-            'traducao_prazo_data',
             'data_previsao_entrega',
             'prazo_pausado_em',
             'prazo_dias_restantes',
@@ -730,7 +729,7 @@ public function create($data, $files)
     //  NOVO BLOCO PARA TRATAR OS FILTROS VINDOS DOS CARDS
     // ==========================================================
     if (!empty($filters['filtro_card'])) {
-        $deadlineDateExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+        $deadlineDateExpression = "COALESCE(\n            p.data_previsao_entrega,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                WHEN p.prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
 
         $deadlineDiffExpression = "CASE\n            WHEN LOWER(p.status_processo) IN ('pendente de pagamento', 'pendente de documentos') AND p.prazo_dias_restantes IS NOT NULL THEN p.prazo_dias_restantes\n            WHEN {$deadlineDateExpression} IS NOT NULL THEN DATEDIFF({$deadlineDateExpression}, CURDATE())\n            ELSE NULL\n        END";
 
@@ -859,7 +858,7 @@ public function create($data, $files)
 
         }
 
-        $deadlineDateExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+        $deadlineDateExpression = "COALESCE(\n            p.data_previsao_entrega,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                WHEN p.prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
 
         $deadlineDiffExpression = "CASE\n            WHEN LOWER(p.status_processo) IN ('pendente de pagamento', 'pendente de documentos') AND p.prazo_dias_restantes IS NOT NULL THEN p.prazo_dias_restantes\n            WHEN {$deadlineDateExpression} IS NOT NULL THEN DATEDIFF({$deadlineDateExpression}, CURDATE())\n            ELSE NULL\n        END";
 
@@ -1527,7 +1526,7 @@ public function create($data, $files)
      */
     public function getDashboardStats()
     {
-        $deadlineExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+        $deadlineExpression = "COALESCE(\n            p.data_previsao_entrega,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                WHEN p.prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
 
         $sql = "SELECT
             COUNT(CASE WHEN status_processo IN ('Serviço em Andamento', 'Serviço em andamento', 'Pendente de pagamento', 'Pendente de documentos') THEN 1 END) as processos_ativos,
@@ -1594,7 +1593,7 @@ public function create($data, $files)
         // Lista de todas as colunas que esta função tem permissão para atualizar.
         $allowed_fields = [
             'status_processo', 'tradutor_id', 'data_inicio_traducao', 'traducao_modalidade',
-            'prazo_dias', 'traducao_prazo_dias', 'traducao_prazo_data', 'data_previsao_entrega',
+            'prazo_dias', 'traducao_prazo_dias', 'data_previsao_entrega',
             'assinatura_tipo', 'data_envio_assinatura', 'data_devolucao_assinatura',
             'finalizacao_tipo', 'data_envio_cartorio', 'os_numero_conta_azul', 'os_numero_omie',
             'prazo_pausado_em', 'prazo_dias_restantes'

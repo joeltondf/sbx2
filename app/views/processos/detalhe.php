@@ -31,7 +31,7 @@ if (!function_exists('process_calculate_deadline_context')) {
         } else {
             $deadline = null;
 
-            $rawDate = $processo['traducao_prazo_data'] ?? null;
+            $rawDate = $processo['data_previsao_entrega'] ?? null;
             if (!empty($rawDate)) {
                 try {
                     $deadline = new DateTimeImmutable((string) $rawDate);
@@ -44,6 +44,15 @@ if (!function_exists('process_calculate_deadline_context')) {
                 try {
                     $start = new DateTimeImmutable((string) $processo['data_inicio_traducao']);
                     $deadline = $start->modify('+' . (int) $processo['traducao_prazo_dias'] . ' days');
+                } catch (Throwable $exception) {
+                    $deadline = null;
+                }
+            }
+
+            if ($deadline === null && !empty($processo['prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
+                try {
+                    $start = new DateTimeImmutable((string) $processo['data_inicio_traducao']);
+                    $deadline = $start->modify('+' . (int) $processo['prazo_dias'] . ' days');
                 } catch (Throwable $exception) {
                     $deadline = null;
                 }
