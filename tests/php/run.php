@@ -278,6 +278,54 @@ runTest('marcarComoLida propaga leitura para notificações relacionadas', funct
     assertEquals(1, (int)$rows[1]['lida']);
 }, $tests);
 
+runTest('Gestor consegue atualizar notificações de outro usuário no mesmo grupo', function (): void {
+    $pdo = new PDO('sqlite::memory:');
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    buildNotificationTestSchema($pdo);
+
+    $pdo->exec("INSERT INTO processos (id, status_processo, titulo) VALUES (210, 'Orçamento', 'Processo 210')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor'), (2, 'Analista A'), (3, 'Analista B')");
+
+    $model = new Notificacao($pdo);
+    $model->criar(2, null, 'Mensagem A', '/link', 'processo_pendente_orcamento', 210, 'gerencia');
+    $model->criar(3, null, 'Mensagem B', '/link', 'processo_pendente_orcamento', 210, 'gerencia');
+
+    $row = $pdo->query('SELECT id FROM notificacoes WHERE usuario_id = 2')->fetch(PDO::FETCH_ASSOC);
+    $notificationId = (int)$row['id'];
+
+    $options = ['allow_group_scope' => true, 'grupo_destino' => 'gerencia'];
+    $updated = $model->marcarListaComoLida([$notificationId], 1, $options);
+
+    assertEquals(2, $updated);
+
+    $rows = $pdo->query('SELECT usuario_id, lida FROM notificacoes ORDER BY usuario_id')->fetchAll(PDO::FETCH_ASSOC);
+    assertEquals(1, (int)$rows[0]['lida']);
+    assertEquals(1, (int)$rows[1]['lida']);
+}, $tests);
+
+runTest('Gestor não consegue atualizar notificações de outro grupo', function (): void {
+    $pdo = new PDO('sqlite::memory:');
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    buildNotificationTestSchema($pdo);
+
+    $pdo->exec("INSERT INTO processos (id, status_processo, titulo) VALUES (220, 'Orçamento', 'Processo 220')");
+    $pdo->exec("INSERT INTO users (id, nome_completo) VALUES (1, 'Gestor'), (2, 'Vendedor')");
+
+    $model = new Notificacao($pdo);
+    $model->criar(2, null, 'Mensagem vendedor', '/link', 'processo_pendente_orcamento', 220, 'vendedor');
+
+    $row = $pdo->query('SELECT id FROM notificacoes WHERE usuario_id = 2')->fetch(PDO::FETCH_ASSOC);
+    $notificationId = (int)$row['id'];
+
+    $options = ['allow_group_scope' => true, 'grupo_destino' => 'gerencia'];
+    $updated = $model->marcarListaComoLida([$notificationId], 1, $options);
+
+    assertEquals(0, $updated);
+
+    $row = $pdo->query('SELECT lida FROM notificacoes WHERE id = ' . $notificationId)->fetch(PDO::FETCH_ASSOC);
+    assertEquals(0, (int)$row['lida']);
+}, $tests);
+
 runTest('getAlertFeed aplica prioridades e filtros agrupados', function (): void {
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
