@@ -150,7 +150,21 @@ class Processo
 
         if (is_numeric($value)) {
             $normalized = (int)$value;
-            return $normalized >= 0 ? $normalized : null;
+            // Zero ou negativos removem o prazo e são tratados como null.
+            return $normalized > 0 ? $normalized : null;
+        }
+
+        if (is_string($value)) {
+            $filtered = preg_replace('/[^0-9-]/', '', $value);
+            if ($filtered === null || $filtered === '' || $filtered === '-') {
+                return null;
+            }
+
+            if (is_numeric($filtered)) {
+                $normalized = (int)$filtered;
+                // Zero ou negativos removem o prazo e são tratados como null.
+                return $normalized > 0 ? $normalized : null;
+            }
         }
 
         return null;
@@ -208,7 +222,7 @@ public function create($data, $files)
             apostilamento_quantidade, apostilamento_valor_unitario,
             postagem_quantidade, postagem_valor_unitario, observacoes,
             data_entrada, data_inicio_traducao, traducao_modalidade,
-            prazo_dias,
+            prazo_dias, traducao_prazo_dias,
             assinatura_tipo, tradutor_id, modalidade_assinatura,
             etapa_faturamento_codigo, codigo_categoria, codigo_conta_corrente, codigo_cenario_fiscal, os_numero_conta_azul
         ) VALUES (
@@ -220,7 +234,7 @@ public function create($data, $files)
             :apostilamento_quantidade, :apostilamento_valor_unitario,
             :postagem_quantidade, :postagem_valor_unitario, :observacoes,
             :data_entrada, :data_inicio_traducao, :traducao_modalidade,
-            :prazo_dias,
+            :prazo_dias, :traducao_prazo_dias,
             :assinatura_tipo, :tradutor_id, :modalidade_assinatura,
             :etapa_faturamento_codigo, :codigo_categoria, :codigo_conta_corrente, :codigo_cenario_fiscal, :os_numero_conta_azul
         )";
@@ -231,7 +245,12 @@ public function create($data, $files)
 
         // Parâmetros CORRIGIDOS: A chave 'orcamento_comprovantes' foi removida.
         $dataEntrada = $data['data_solicitacao'] ?? $data['data_entrada'] ?? date('Y-m-d');
+        $traducaoPrazoDias = $this->normalizePrazoDias($data['traducao_prazo_dias'] ?? null);
         $prazoDias = $this->normalizePrazoDias($data['prazo_dias'] ?? null);
+        if ($prazoDias === null && $traducaoPrazoDias !== null) {
+            // Ao cadastrar serviços rápidos, zero ou vazio removem o prazo geral; reaproveitamos o prazo de tradução quando informado.
+            $prazoDias = $traducaoPrazoDias;
+        }
         $dataPrevisaoEntrega = $this->calculateDeadlineFromCreation($dataEntrada, $prazoDias);
 
         $params = [
@@ -264,6 +283,7 @@ public function create($data, $files)
             'data_inicio_traducao' => $data['data_inicio_traducao'] ?? null,
             'traducao_modalidade' => $data['traducao_modalidade'] ?? 'Normal',
             'prazo_dias' => $prazoDias,
+            'traducao_prazo_dias' => $traducaoPrazoDias,
             'assinatura_tipo' => $data['assinatura_tipo'] ?? 'Digital',
             'tradutor_id' => $data['id_tradutor'] ?? $data['tradutor_id'] ?? null,
             'modalidade_assinatura' => $data['modalidade_assinatura'] ?? null,
@@ -568,6 +588,7 @@ public function create($data, $files)
         $params = [':id' => $processoId];
 
         $shouldUpdateDeadline = false;
+        $translationDeadlineProvided = false;
 
         foreach ($allowedFields as $field) {
             if (!array_key_exists($field, $data)) {
@@ -576,20 +597,39 @@ public function create($data, $files)
 
             $value = $data[$field];
 
+            if ($value === '') {
+                $value = null;
+            }
+
             if (in_array($field, ['valor_total', 'orcamento_valor_entrada', 'orcamento_valor_restante'], true)) {
                 $value = $this->parseCurrency($value);
+            } elseif (in_array($field, ['prazo_dias', 'traducao_prazo_dias'], true)) {
+                // Zero ou valores vazios removem o prazo e devem ser tratados como NULL.
+                $value = $this->normalizePrazoDias($value);
+            } elseif (in_array($field, ['orcamento_parcelas', 'cliente_id', 'prazo_dias_restantes'], true) && $value !== null) {
+                $value = (int)$value;
             }
 
-            if (in_array($field, ['prazo_dias', 'traducao_prazo_dias', 'orcamento_parcelas', 'cliente_id', 'prazo_dias_restantes'], true)) {
-                $value = $value === null ? null : (int)$value;
-            }
-
-            $params[":" . $field] = ($value === '' ? null : $value);
+            $params[":" . $field] = $value;
             $setParts[] = "`{$field}` = :{$field}";
 
-            if ($field === 'prazo_dias') {
+            if (in_array($field, ['prazo_dias', 'traducao_prazo_dias'], true)) {
                 $shouldUpdateDeadline = true;
+
+                if ($field === 'traducao_prazo_dias') {
+                    $translationDeadlineProvided = true;
+                }
             }
+        }
+
+        if ($translationDeadlineProvided) {
+            $translationValue = $params[':traducao_prazo_dias'] ?? null;
+
+            if (!in_array('`prazo_dias` = :prazo_dias', $setParts, true)) {
+                $setParts[] = '`prazo_dias` = :prazo_dias';
+            }
+
+            $params[':prazo_dias'] = $translationValue;
         }
 
         if ($shouldUpdateDeadline && !array_key_exists('data_previsao_entrega', $data)) {
@@ -597,7 +637,7 @@ public function create($data, $files)
                 $params[':data_inicio_traducao'] = null;
             }
 
-            $setParts[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN data_previsao_entrega\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
+            $setParts[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN NULL\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
         }
 
         if (empty($setParts)) {
@@ -1610,22 +1650,39 @@ public function create($data, $files)
 
         // Monta a query dinamicamente, usando apenas os campos que foram enviados pelo controller.
         $shouldUpdateDeadline = false;
+        $translationDeadlineProvided = false;
 
         foreach ($allowed_fields as $field) {
             if (array_key_exists($field, $data)) {
                 $value = ($data[$field] === '') ? null : $data[$field];
 
-                if (in_array($field, ['prazo_dias', 'traducao_prazo_dias', 'prazo_dias_restantes'], true) && $value !== null) {
+                if (in_array($field, ['prazo_dias', 'traducao_prazo_dias'], true)) {
+                    // Prazo igual a zero remove a deadline e deve ser persistido como NULL.
+                    $value = $this->normalizePrazoDias($value);
+                } elseif ($field === 'prazo_dias_restantes' && $value !== null) {
                     $value = (int) $value;
                 }
 
                 $fieldsToUpdate[] = "`{$field}` = :{$field}";
                 $params[$field] = $value;
 
-                if ($field === 'prazo_dias') {
+                if (in_array($field, ['prazo_dias', 'traducao_prazo_dias'], true)) {
                     $shouldUpdateDeadline = true;
+
+                    if ($field === 'traducao_prazo_dias') {
+                        $translationDeadlineProvided = true;
+                    }
                 }
             }
+        }
+        if ($translationDeadlineProvided) {
+            $translationValue = $params['traducao_prazo_dias'] ?? null;
+
+            if (!in_array('`prazo_dias` = :prazo_dias', $fieldsToUpdate, true)) {
+                $fieldsToUpdate[] = "`prazo_dias` = :prazo_dias";
+            }
+
+            $params['prazo_dias'] = $translationValue;
         }
 
         if ($shouldUpdateDeadline && !array_key_exists('data_previsao_entrega', $data)) {
@@ -1633,7 +1690,7 @@ public function create($data, $files)
                 $params['data_inicio_traducao'] = null;
             }
 
-            $fieldsToUpdate[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN data_previsao_entrega\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
+            $fieldsToUpdate[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN NULL\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
         }
 
         // Se, por algum motivo, nenhum campo válido foi enviado, interrompe a execução.

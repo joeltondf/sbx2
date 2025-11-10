@@ -744,16 +744,7 @@ class ProcessosController
 
             $prazoDias = $this->normalizePrazoDiasInput($payload['prazo_dias'] ?? $payload['traducao_prazo_dias'] ?? null);
             $payload['prazo_dias'] = $prazoDias;
-            if ($prazoDias !== null) {
-                $payload['traducao_prazo_dias'] = $prazoDias;
-            }
-
-            $deadline = $this->determineEffectiveDeadline($processo, array_merge($processo, $payload));
-            if ($deadline !== null) {
-                $payload['data_previsao_entrega'] = $deadline->format('Y-m-d');
-            } else {
-                $payload['data_previsao_entrega'] = null;
-            }
+            $payload['traducao_prazo_dias'] = $prazoDias;
 
             if ($this->processoModel->updateEtapas($id, $payload)) {
                 $processoData = $this->processoModel->getById($id);
@@ -973,19 +964,8 @@ class ProcessosController
                 $payload = [
                     'data_inicio_traducao' => $dataInicio,
                     'prazo_dias' => $prazoDias,
+                    'traducao_prazo_dias' => $prazoDias,
                 ];
-
-                if ($prazoDias !== null) {
-                    $payload['traducao_prazo_dias'] = $prazoDias;
-                }
-
-                $deadline = $this->determineEffectiveDeadline($process, array_merge($process, $payload));
-                if ($deadline !== null) {
-                    $deadlineString = $deadline->format('Y-m-d');
-                    $payload['data_previsao_entrega'] = $deadlineString;
-                } else {
-                    $payload['data_previsao_entrega'] = null;
-                }
 
                 if (!$this->processoModel->updateFromLeadConversion($processId, $payload)) {
                     throw new RuntimeException('Falha ao salvar o prazo do serviço.');
@@ -2387,29 +2367,59 @@ class ProcessosController
             || array_key_exists('traducao_prazo_dias', $input)
             || array_key_exists('data_previsao_entrega', $input);
         if ($validarPrazo) {
-            $dataInicio = $input['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
-            if (empty($dataInicio)) {
-                throw new InvalidArgumentException('Informe a data de início da tradução.');
-            }
-
-            $dataInicioObj = DateTime::createFromFormat('Y-m-d', $dataInicio);
-            if (!$dataInicioObj) {
-                throw new InvalidArgumentException('Data de início da tradução inválida.');
-            }
-
-            $hoje = new DateTime('today');
-            if ($dataInicioObj < $hoje) {
-                throw new InvalidArgumentException('A data de início da tradução não pode ser anterior à data atual.');
-            }
-
             $rawPrazoDias = $input['prazo_dias']
                 ?? $input['traducao_prazo_dias']
                 ?? $processo['prazo_dias']
                 ?? $processo['traducao_prazo_dias']
                 ?? null;
+
+            $prazoFoiInformado = !in_array($rawPrazoDias, [null, ''], true);
+            $prazoNormalizadoParaValidacao = null;
+
+            if ($prazoFoiInformado) {
+                if (is_numeric($rawPrazoDias)) {
+                    $prazoNormalizadoParaValidacao = (int) $rawPrazoDias;
+                } elseif (is_string($rawPrazoDias)) {
+                    $filtrado = preg_replace('/[^0-9-]/', '', $rawPrazoDias);
+                    if ($filtrado !== null && $filtrado !== '' && $filtrado !== '-') {
+                        $prazoNormalizadoParaValidacao = (int) $filtrado;
+                    }
+                }
+
+                if ($prazoNormalizadoParaValidacao === null) {
+                    throw new InvalidArgumentException('Informe um número inteiro válido para o prazo de tradução ou deixe o campo em branco.');
+                }
+
+                if ($prazoNormalizadoParaValidacao < 0) {
+                    throw new InvalidArgumentException('O prazo de tradução não pode ser negativo.');
+                }
+            }
+
             $dias = $this->normalizePrazoDiasInput($rawPrazoDias);
-            if ($dias === null || $dias < 1) {
-                throw new InvalidArgumentException('Informe a quantidade de dias do prazo de tradução.');
+
+            if ($dias === null) {
+                $dataInicioInformado = $input['data_inicio_traducao'] ?? null;
+                if ($dataInicioInformado !== null && $dataInicioInformado !== '') {
+                    $dataInicioObj = DateTime::createFromFormat('Y-m-d', $dataInicioInformado);
+                    if (!$dataInicioObj) {
+                        throw new InvalidArgumentException('Data de início da tradução inválida.');
+                    }
+                }
+            } else {
+                $dataInicio = $input['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
+                if (empty($dataInicio)) {
+                    throw new InvalidArgumentException('Informe a data de início da tradução para calcular o prazo.');
+                }
+
+                $dataInicioObj = DateTime::createFromFormat('Y-m-d', $dataInicio);
+                if (!$dataInicioObj) {
+                    throw new InvalidArgumentException('Data de início da tradução inválida.');
+                }
+
+                $hoje = new DateTime('today');
+                if ($dataInicioObj < $hoje) {
+                    throw new InvalidArgumentException('A data de início da tradução não pode ser anterior à data atual.');
+                }
             }
         }
 
@@ -2614,9 +2624,8 @@ class ProcessosController
 
         $this->applyDeadlinePauseLogic($processo, $input, $novoStatus, $dados);
 
-        if ($prazoDias !== null) {
-            $dados['traducao_prazo_dias'] = $prazoDias;
-        }
+        // Mantemos os prazos sincronizados: zero ou vazio devem zerar ambos os campos no banco.
+        $dados['traducao_prazo_dias'] = $prazoDias;
 
         $deadline = $this->determineEffectiveDeadline($processo, $dados);
         if ($deadline !== null) {
@@ -3003,7 +3012,8 @@ class ProcessosController
 
         if (is_numeric($value)) {
             $normalized = (int) $value;
-            return $normalized >= 0 ? $normalized : null;
+            // Zero deve remover o prazo; tratamos 0 ou valores negativos como null.
+            return $normalized > 0 ? $normalized : null;
         }
 
         if (is_string($value)) {
@@ -3014,7 +3024,8 @@ class ProcessosController
 
             if (is_numeric($filtered)) {
                 $normalized = (int) $filtered;
-                return $normalized >= 0 ? $normalized : null;
+                // Zero deve remover o prazo; tratamos 0 ou valores negativos como null.
+                return $normalized > 0 ? $normalized : null;
             }
         }
 

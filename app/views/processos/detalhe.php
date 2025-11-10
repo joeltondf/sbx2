@@ -815,7 +815,7 @@ $prospectionLabel = $prospectionCode !== ''
         <!-- Data de envio para tradutor -->
         <div>
         <label for="modal_data_inicio_traducao" class="block text-sm font-medium text-gray-700 mb-1">
-            Data de Envio para Tradutor <span class="text-red-500">*</span>
+            Data de Envio para Tradutor
         </label>
         <input
             type="date"
@@ -823,26 +823,24 @@ $prospectionLabel = $prospectionCode !== ''
             id="modal_data_inicio_traducao"
             class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
             value="<?php echo htmlspecialchars($processo['data_inicio_traducao'] ?? date('Y-m-d')); ?>"
-            required
         >
-        <p class="mt-1 text-xs text-gray-500">Preenche automaticamente com a data de hoje se ainda não houver data.</p>
+        <p class="mt-1 text-xs text-gray-500">Obrigatória apenas quando houver prazo de tradução maior que zero.</p>
         </div>
 
         <!-- Prazo do Serviço -->
         <div class="border-t border-gray-100 pt-4">
-        <label for="modal_prazo_dias" class="block text-sm font-medium text-gray-700 mb-2">
-            Prazo do Serviço (dias) <span class="text-red-500">*</span>
+        <label for="modal_traducao_prazo_dias" class="block text-sm font-medium text-gray-700 mb-2">
+            Prazo do Serviço (dias)
         </label>
         <input
             type="number"
-            name="prazo_dias"
-            id="modal_prazo_dias"
-            min="1"
+            name="traducao_prazo_dias"
+            id="modal_traducao_prazo_dias"
             class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
-            value="<?php echo htmlspecialchars($processo['prazo_dias'] ?? ''); ?>"
+            value="<?php echo htmlspecialchars($processo['traducao_prazo_dias'] ?? $processo['prazo_dias'] ?? ''); ?>"
             placeholder="Ex.: 5"
         >
-        <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias corridos.</p>
+        <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias. Use zero ou deixe em branco para remover o prazo.</p>
         </div>
 
         <!-- Ações -->
@@ -1157,15 +1155,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (confirmStatusChangeBtn) {
     confirmStatusChangeBtn.addEventListener('click', () => {
-      // Pega os valores do NOVO modal
-      const envio = $id('modal_req_data_inicio_traducao').value;
-      const prazoDiasValor  = $id('modal_req_prazo_dias').value;
+      const envioCampo = $id('modal_req_data_inicio_traducao');
+      const prazoCampo = $id('modal_req_prazo_dias');
+      const envio = envioCampo ? envioCampo.value : '';
+      const prazoTexto = prazoCampo ? prazoCampo.value.trim() : '';
+      const prazoNumero = prazoTexto === '' ? null : parseInt(prazoTexto, 10);
 
-      // Validações
       const erros = [];
-      if (!envio) erros.push('Informe a Data de Envio para o Tradutor.');
-      if (!prazoDiasValor || parseInt(prazoDiasValor, 10) <= 0) {
-        erros.push('Informe os dias de prazo (maior que zero).');
+      if (prazoTexto !== '' && Number.isNaN(prazoNumero)) {
+        erros.push('Informe um número inteiro válido para o prazo de tradução ou deixe o campo em branco.');
+      }
+      if (prazoNumero !== null && prazoNumero < 0) {
+        erros.push('O prazo de tradução não pode ser negativo.');
+      }
+      if (prazoNumero !== null && prazoNumero > 0 && !envio) {
+        erros.push('Informe a Data de Envio para o Tradutor.');
       }
 
       if (erros.length) {
@@ -1175,14 +1179,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
       disableHiddenDeadlineFields();
 
-      // Preenche os campos ocultos do formulário principal e o submete
       const fieldsToEnable = [];
       if (hEnvio) {
         hEnvio.value = envio;
         fieldsToEnable.push(hEnvio);
       }
       if (hPrazoDias) {
-        hPrazoDias.value = prazoDiasValor;
+        hPrazoDias.value = prazoTexto;
         fieldsToEnable.push(hPrazoDias);
       }
 

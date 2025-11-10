@@ -216,6 +216,7 @@ $deadlinePreview = $formData['data_previsao_entrega'] ?? '';
             <div class="md:col-span-1">
                 <label for="data_inicio_traducao" class="block text-sm font-medium text-gray-700">Data de Envio para Tradutor</label>
                 <input type="date" name="data_inicio_traducao" id="data_inicio_traducao" value="<?php echo htmlspecialchars($formData['data_inicio_traducao'] ?? date('Y-m-d')); ?>" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                <p class="mt-1 text-xs text-gray-500">Obrigatória apenas quando houver prazo de tradução maior que zero.</p>
             </div>
             <div class="md:col-span-1">
                 <label for="traducao_prazo_dias" class="block text-sm font-medium text-gray-700">Quantidade de Dias Corridos</label>
@@ -227,6 +228,7 @@ $deadlinePreview = $formData['data_previsao_entrega'] ?? '';
                     value="<?php echo htmlspecialchars($deadlineDaysValue); ?>"
                     class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
                 >
+                <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias. Use zero ou deixe em branco para remover o prazo.</p>
             </div>
             <div class="md:col-span-1">
                 <span class="block text-sm font-medium text-gray-700">Previsão de Entrega</span>
