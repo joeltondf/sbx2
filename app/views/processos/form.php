@@ -1316,17 +1316,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function togglePrazoInputs() {
-        const prazoTipoRadio = document.querySelector('input[name="traducao_prazo_tipo"]:checked');
-        if (!prazoTipoRadio) return;
-        const prazoTipo = prazoTipoRadio.value;
-        const prazoDiaContainer = document.getElementById('prazo_dia_container');
-        const prazoDataContainer = document.getElementById('prazo_data_container');
-        if (prazoDiaContainer && prazoDataContainer) {
-            prazoDiaContainer.classList.toggle('hidden', prazoTipo !== 'dias');
-            prazoDataContainer.classList.toggle('hidden', prazoTipo !== 'data');
-        }
-    }
 
     form.addEventListener('change', function(e) {
         if (e.target.matches('.servico-select')) {
@@ -1366,7 +1355,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.querySelectorAll('.service-checkbox').forEach(cb => cb.addEventListener('change', toggleServiceSections));
-    document.querySelectorAll('input[name="traducao_prazo_tipo"]').forEach(radio => radio.addEventListener('change', togglePrazoInputs));
     
     function loadExistingData() {
         docIndex = 0;
