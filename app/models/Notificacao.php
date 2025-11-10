@@ -175,6 +175,8 @@ class Notificacao
         int $limit = 7,
         string $sourceTimezone = 'UTC'
     ): array {
+        $grupoDestino = trim($grupoDestino) !== '' ? trim($grupoDestino) : 'gerencia';
+
         $result = $this->getAlertFeed(
             $usuarioId,
             $grupoDestino,
