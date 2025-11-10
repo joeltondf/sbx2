@@ -44,18 +44,19 @@ include __DIR__ . '/partials/conversion_steps.php';
             <div>
                 <label class="block text-sm font-semibold text-gray-700" for="data_inicio_traducao">Data de início</label>
                 <input type="date" id="data_inicio_traducao" name="data_inicio_traducao" value="<?php echo htmlspecialchars($formData['data_inicio_traducao'] ?? date('Y-m-d')); ?>" class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500">
+                <p class="mt-2 text-xs text-gray-500">Obrigatória apenas quando houver prazo de tradução maior que zero.</p>
             </div>
             <div>
                 <label class="block text-sm font-semibold text-gray-700" for="traducao_prazo_dias">Dias para entrega</label>
                 <input
                     type="number"
-                    min="1"
                     id="traducao_prazo_dias"
                     name="traducao_prazo_dias"
                     value="<?php echo htmlspecialchars($deadlineDays); ?>"
                     class="mt-2 block w-full rounded-md border border-gray-300 shadow-sm focus:ring-orange-500 focus:border-orange-500"
                     data-deadline-days
                 >
+                <p class="mt-2 text-xs text-gray-500">Informe um número inteiro de dias. Use zero ou deixe em branco para remover o prazo.</p>
             </div>
         </div>
 
