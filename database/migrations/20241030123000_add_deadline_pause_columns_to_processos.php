@@ -19,7 +19,7 @@ class AddDeadlinePauseColumnsToProcessosMigration
             $this->addColumnIfNotExists(
                 'processos',
                 'prazo_pausado_em',
-                "DATETIME NULL DEFAULT NULL AFTER traducao_prazo_data"
+                "DATETIME NULL DEFAULT NULL AFTER data_previsao_entrega"
             );
 
             $this->addColumnIfNotExists(
