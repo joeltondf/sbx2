@@ -987,6 +987,8 @@ public function create($data, $files)
             'Orçamento Pendente',
             'Serviço Pendente',
             'Serviço em Andamento',
+            'Pendente de pagamento',
+            'Pendente de documentos',
             'Serviço',
             'Serviço Pendente com Serviço',
             'Serviço em andamento',
