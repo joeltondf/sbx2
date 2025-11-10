@@ -9,22 +9,103 @@ function has_service($processo, $service_name) {
     return in_array($service_name, $services, true);
 }
 
-function format_prazo_countdown($dateString) {
-    if (empty($dateString)) return '<span class="text-gray-500">Não definido</span>';
-    try {
-        $today = new DateTime(); $today->setTime(0, 0, 0);
-        $prazoDate = new DateTime($dateString); $prazoDate->setTime(0, 0, 0);
-        if ($prazoDate < $today) {
-            $diff = $today->diff($prazoDate);
-            return '<span class="font-bold text-red-500">Atrasado há ' . $diff->days . ' dia(s)</span>';
-        } elseif ($prazoDate == $today) {
-            return '<span class="font-bold text-blue-500">Entrega hoje</span>';
+if (!function_exists('process_calculate_deadline_context')) {
+    function process_calculate_deadline_context(array $processo, string $statusNormalized): array
+    {
+        $pauseLabels = [
+            'pendente de pagamento' => 'pausado/pagamento',
+            'pendente de documentos' => 'pausado/documento',
+        ];
+
+        $pauseLabel = $pauseLabels[$statusNormalized] ?? null;
+        $isPaused = $pauseLabel !== null;
+        $daysRemaining = null;
+
+        if ($statusNormalized === 'concluído') {
+            $daysRemaining = 0;
+        } elseif ($isPaused) {
+            $rawStored = $processo['prazo_dias_restantes'] ?? null;
+            if ($rawStored !== null && $rawStored !== '') {
+                $daysRemaining = (int) $rawStored;
+            }
         } else {
-            $diff = $today->diff($prazoDate);
-            return '<span class="font-bold text-green-600">Faltam ' . ($diff->days) . ' dia(s)</span>';
+            $deadline = null;
+
+            $rawDate = $processo['traducao_prazo_data'] ?? null;
+            if (!empty($rawDate)) {
+                try {
+                    $deadline = new DateTimeImmutable((string) $rawDate);
+                } catch (Throwable $exception) {
+                    $deadline = null;
+                }
+            }
+
+            if ($deadline === null && !empty($processo['traducao_prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
+                try {
+                    $start = new DateTimeImmutable((string) $processo['data_inicio_traducao']);
+                    $deadline = $start->modify('+' . (int) $processo['traducao_prazo_dias'] . ' days');
+                } catch (Throwable $exception) {
+                    $deadline = null;
+                }
+            }
+
+            if ($deadline instanceof DateTimeImmutable) {
+                $today = new DateTimeImmutable('today');
+                $daysRemaining = (int) $today->diff($deadline)->format('%r%a');
+            }
         }
-    } catch (Exception $e) {
-        return '<span class="text-gray-500">Data inválida</span>';
+
+        $display = '—';
+        $badgeClass = 'text-gray-500';
+
+        if ($daysRemaining !== null) {
+            $display = (string) $daysRemaining;
+
+            if ($isPaused) {
+                $badgeClass = 'bg-slate-200 text-slate-800';
+            } elseif ($daysRemaining <= 0) {
+                $badgeClass = 'bg-red-200 text-red-800';
+            } elseif ($daysRemaining <= 3) {
+                $badgeClass = 'bg-yellow-200 text-yellow-800';
+            } else {
+                $badgeClass = 'text-green-600';
+            }
+        }
+
+        return [
+            'display' => $display,
+            'class' => $badgeClass,
+            'is_paused' => $isPaused,
+            'pause_label' => $pauseLabel,
+        ];
+    }
+}
+
+if (!function_exists('process_render_deadline_badge')) {
+    function process_render_deadline_badge(array $context): string
+    {
+        $badgeClass = htmlspecialchars($context['class'] ?? 'text-gray-500', ENT_QUOTES, 'UTF-8');
+        $displayValue = htmlspecialchars($context['display'] ?? '—', ENT_QUOTES, 'UTF-8');
+        $pauseBadge = '';
+
+        if (!empty($context['is_paused']) && !empty($context['pause_label'])) {
+            $pauseBadge = '<span class="px-2 py-0.5 inline-flex items-center text-[10px] uppercase tracking-wide font-semibold rounded-full bg-slate-200 text-slate-800">'
+                . htmlspecialchars((string) $context['pause_label'], ENT_QUOTES, 'UTF-8')
+                . '</span>';
+        }
+
+        return '<div class="flex items-center gap-2">'
+            . '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ' . $badgeClass . '">' . $displayValue . '</span>'
+            . $pauseBadge
+            . '</div>';
+    }
+}
+
+if (!function_exists('format_prazo_countdown')) {
+    function format_prazo_countdown(array $processo, string $statusNormalized): string
+    {
+        $context = process_calculate_deadline_context($processo, $statusNormalized);
+        return process_render_deadline_badge($context);
     }
 }
 
@@ -322,18 +403,7 @@ $prospectionLabel = $prospectionCode !== ''
                     <p class="font-medium text-gray-500">Prazo do Serviço</p>
                     <div id="display-traducao_prazo_data_formatted">
                         <?php
-                            $data_previsao_final_str = null;
-                            // Verifica se o prazo é por data específica
-                            if (!empty($processo['traducao_prazo_data'])) {
-                                $data_previsao_final_str = $processo['traducao_prazo_data'];
-                            } 
-                            // Senão, calcula o prazo com base nos dias
-                            elseif (!empty($processo['traducao_prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
-                                $data_previsao_final = new DateTime($processo['data_inicio_traducao']);
-                                $data_previsao_final->modify('+' . $processo['traducao_prazo_dias'] . ' days');
-                                $data_previsao_final_str = $data_previsao_final->format('Y-m-d');
-                            }
-                            echo format_prazo_countdown($data_previsao_final_str);
+                            echo format_prazo_countdown($processo, $statusNormalized);
                         ?>
                     </div>
                 </div>
