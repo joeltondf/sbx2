@@ -548,6 +548,9 @@ public function create($data, $files)
             'status_processo',
             'data_inicio_traducao',
             'prazo_dias',
+            'traducao_prazo_dias',
+            'traducao_prazo_data',
+            'data_previsao_entrega',
             'prazo_pausado_em',
             'prazo_dias_restantes',
             'valor_total',
@@ -578,7 +581,7 @@ public function create($data, $files)
                 $value = $this->parseCurrency($value);
             }
 
-            if (in_array($field, ['prazo_dias', 'orcamento_parcelas', 'cliente_id', 'prazo_dias_restantes'], true)) {
+            if (in_array($field, ['prazo_dias', 'traducao_prazo_dias', 'orcamento_parcelas', 'cliente_id', 'prazo_dias_restantes'], true)) {
                 $value = $value === null ? null : (int)$value;
             }
 
@@ -590,8 +593,12 @@ public function create($data, $files)
             }
         }
 
-        if ($shouldUpdateDeadline) {
-            $setParts[] = "data_previsao_entrega = CASE WHEN :prazo_dias IS NULL THEN NULL ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY) END";
+        if ($shouldUpdateDeadline && !array_key_exists('data_previsao_entrega', $data)) {
+            if (!array_key_exists(':data_inicio_traducao', $params)) {
+                $params[':data_inicio_traducao'] = null;
+            }
+
+            $setParts[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN data_previsao_entrega\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
         }
 
         if (empty($setParts)) {
@@ -1587,7 +1594,7 @@ public function create($data, $files)
         // Lista de todas as colunas que esta função tem permissão para atualizar.
         $allowed_fields = [
             'status_processo', 'tradutor_id', 'data_inicio_traducao', 'traducao_modalidade',
-            'prazo_dias',
+            'prazo_dias', 'traducao_prazo_dias', 'traducao_prazo_data', 'data_previsao_entrega',
             'assinatura_tipo', 'data_envio_assinatura', 'data_devolucao_assinatura',
             'finalizacao_tipo', 'data_envio_cartorio', 'os_numero_conta_azul', 'os_numero_omie',
             'prazo_pausado_em', 'prazo_dias_restantes'
@@ -1607,9 +1614,14 @@ public function create($data, $files)
 
         foreach ($allowed_fields as $field) {
             if (array_key_exists($field, $data)) {
+                $value = ($data[$field] === '') ? null : $data[$field];
+
+                if (in_array($field, ['prazo_dias', 'traducao_prazo_dias', 'prazo_dias_restantes'], true) && $value !== null) {
+                    $value = (int) $value;
+                }
+
                 $fieldsToUpdate[] = "`{$field}` = :{$field}";
-                // Trata valores que são strings vazias como NULL para o banco de dados.
-                $params[$field] = ($data[$field] === '') ? null : $data[$field];
+                $params[$field] = $value;
 
                 if ($field === 'prazo_dias') {
                     $shouldUpdateDeadline = true;
@@ -1617,8 +1629,12 @@ public function create($data, $files)
             }
         }
 
-        if ($shouldUpdateDeadline) {
-            $fieldsToUpdate[] = "data_previsao_entrega = CASE WHEN :prazo_dias IS NULL THEN NULL ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY) END";
+        if ($shouldUpdateDeadline && !array_key_exists('data_previsao_entrega', $data)) {
+            if (!array_key_exists('data_inicio_traducao', $params)) {
+                $params['data_inicio_traducao'] = null;
+            }
+
+            $fieldsToUpdate[] = "data_previsao_entrega = CASE\n                WHEN :prazo_dias IS NULL THEN data_previsao_entrega\n                WHEN COALESCE(:data_inicio_traducao, data_inicio_traducao) IS NOT NULL THEN DATE_ADD(COALESCE(:data_inicio_traducao, data_inicio_traducao), INTERVAL :prazo_dias DAY)\n                ELSE DATE_ADD(data_criacao, INTERVAL :prazo_dias DAY)\n            END";
         }
 
         // Se, por algum motivo, nenhum campo válido foi enviado, interrompe a execução.
