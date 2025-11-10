@@ -994,6 +994,8 @@ public function create($data, $files)
             'Orçamento Pendente',
             'Serviço Pendente',
             'Serviço em Andamento',
+            'Pendente de pagamento',
+            'Pendente de documentos',
             'Serviço',
             'Serviço Pendente com Serviço',
             'Serviço em andamento',
@@ -1546,7 +1548,8 @@ public function create($data, $files)
             'status_processo', 'tradutor_id', 'data_inicio_traducao', 'traducao_modalidade',
             'traducao_prazo_tipo', 'traducao_prazo_dias', 'traducao_prazo_data',
             'assinatura_tipo', 'data_envio_assinatura', 'data_devolucao_assinatura',
-            'finalizacao_tipo', 'data_envio_cartorio', 'os_numero_conta_azul', 'os_numero_omie'
+            'finalizacao_tipo', 'data_envio_cartorio', 'os_numero_conta_azul', 'os_numero_omie',
+            'prazo_pausado_em', 'prazo_dias_restantes'
         ];
 
         // Adiciona a data de finalização apenas se o status for 'Concluído'
