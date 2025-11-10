@@ -49,6 +49,7 @@ include __DIR__ . '/partials/conversion_steps.php';
                 <label class="block text-sm font-semibold text-gray-700" for="traducao_prazo_dias">Dias para entrega</label>
                 <input
                     type="number"
+                    min="1"
                     id="traducao_prazo_dias"
                     name="traducao_prazo_dias"
                     value="<?php echo htmlspecialchars($deadlineDays); ?>"
