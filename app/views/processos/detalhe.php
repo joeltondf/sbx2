@@ -9,25 +9,6 @@ function has_service($processo, $service_name) {
     return in_array($service_name, $services, true);
 }
 
-function format_prazo_countdown($dateString) {
-    if (empty($dateString)) return '<span class="text-gray-500">Não definido</span>';
-    try {
-        $today = new DateTime(); $today->setTime(0, 0, 0);
-        $prazoDate = new DateTime($dateString); $prazoDate->setTime(0, 0, 0);
-        if ($prazoDate < $today) {
-            $diff = $today->diff($prazoDate);
-            return '<span class="font-bold text-red-500">Atrasado há ' . $diff->days . ' dia(s)</span>';
-        } elseif ($prazoDate == $today) {
-            return '<span class="font-bold text-blue-500">Entrega hoje</span>';
-        } else {
-            $diff = $today->diff($prazoDate);
-            return '<span class="font-bold text-green-600">Faltam ' . ($diff->days) . ' dia(s)</span>';
-        }
-    } catch (Exception $e) {
-        return '<span class="text-gray-500">Data inválida</span>';
-    }
-}
-
 function normalize_status_info(?string $status): array {
     $normalized = mb_strtolower(trim((string)$status));
 
@@ -320,22 +301,17 @@ $prospectionLabel = $prospectionCode !== ''
                 </div>
                 <div class="md:col-span-2">
                     <p class="font-medium text-gray-500">Prazo do Serviço</p>
-                    <div id="display-traducao_prazo_data_formatted">
+                    <p class="text-gray-800" id="display-prazo_dias">
                         <?php
-                            $data_previsao_final_str = null;
-                            // Verifica se o prazo é por data específica
-                            if (!empty($processo['traducao_prazo_data'])) {
-                                $data_previsao_final_str = $processo['traducao_prazo_data'];
-                            } 
-                            // Senão, calcula o prazo com base nos dias
-                            elseif (!empty($processo['traducao_prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
-                                $data_previsao_final = new DateTime($processo['data_inicio_traducao']);
-                                $data_previsao_final->modify('+' . $processo['traducao_prazo_dias'] . ' days');
-                                $data_previsao_final_str = $data_previsao_final->format('Y-m-d');
+                            $prazoDias = $processo['prazo_dias'] ?? null;
+                            if (is_numeric($prazoDias) && (int) $prazoDias > 0) {
+                                $prazoDias = (int) $prazoDias;
+                                echo htmlspecialchars($prazoDias . ' dia' . ($prazoDias === 1 ? '' : 's'));
+                            } else {
+                                echo 'Pendente';
                             }
-                            echo format_prazo_countdown($data_previsao_final_str);
                         ?>
-                    </div>
+                    </p>
                 </div>
 
             </div>
@@ -521,9 +497,7 @@ $prospectionLabel = $prospectionCode !== ''
                     <input type="hidden" name="id" value="<?php echo $processo['id']; ?>">
 
                     <input type="hidden" name="data_inicio_traducao" id="hidden_data_inicio_traducao" data-original-name="data_inicio_traducao">
-                    <input type="hidden" name="traducao_prazo_tipo" id="hidden_traducao_prazo_tipo" data-original-name="traducao_prazo_tipo">
-                    <input type="hidden" name="traducao_prazo_dias" id="hidden_traducao_prazo_dias" data-original-name="traducao_prazo_dias">
-                    <input type="hidden" name="traducao_prazo_data" id="hidden_traducao_prazo_data" data-original-name="traducao_prazo_data">
+                    <input type="hidden" name="prazo_dias" id="hidden_prazo_dias" data-original-name="prazo_dias">
                     <div>
                         <label for="status_processo" class="block text-sm font-medium text-gray-700">Mudar Status para:</label>
                         <select id="status_processo" name="status_processo" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
@@ -650,40 +624,18 @@ $prospectionLabel = $prospectionCode !== ''
 
             <!-- Prazo do Serviço -->
             <div class="border-t border-gray-100 pt-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Prazo do Serviço <span class="text-red-500">*</span>
+                <label for="modal_req_prazo_dias" class="block text-sm font-medium text-gray-700 mb-1">
+                    Prazo do Serviço (dias) <span class="text-red-500">*</span>
                 </label>
-
-                <!-- Tipo do prazo -->
-                <div class="flex items-center gap-6">
-                    <label class="inline-flex items-center gap-2">
-                        <input type="radio" name="modal_req_prazo_tipo" value="dias" class="prazo-req-tipo-radio" checked>
-                        <span class="text-sm text-gray-800">Em dias</span>
-                    </label>
-                    <label class="inline-flex items-center gap-2">
-                        <input type="radio" name="modal_req_prazo_tipo" value="data" class="prazo-req-tipo-radio">
-                        <span class="text-sm text-gray-800">Data específica</span>
-                    </label>
-                </div>
-
-                <!-- Conteúdo dinâmico do prazo -->
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <!-- Prazo em dias -->
-                    <div id="modal_req_prazo_dias_container">
-                        <label for="modal_req_traducao_prazo_dias" class="block text-sm font-medium text-gray-700 mb-1">
-                            Dias para Entrega <span class="text-red-500">*</span>
-                        </label>
-                        <input type="number" min="1" id="modal_req_traducao_prazo_dias" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400" placeholder="Ex.: 5" required>
-                    </div>
-
-                    <!-- Prazo por data específica -->
-                    <div id="modal_req_prazo_data_container" class="hidden">
-                        <label for="modal_req_traducao_prazo_data" class="block text-sm font-medium text-gray-700 mb-1">
-                            Data da Entrega <span class="text-red-500">*</span>
-                        </label>
-                        <input type="date" id="modal_req_traducao_prazo_data" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400">
-                    </div>
-                </div>
+                <input
+                    type="number"
+                    min="1"
+                    id="modal_req_prazo_dias"
+                    class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
+                    placeholder="Ex.: 5"
+                    required
+                >
+                <p class="mt-1 text-xs text-gray-500">Informe o prazo em dias corridos.</p>
             </div>
         </div>
 
@@ -769,65 +721,19 @@ $prospectionLabel = $prospectionCode !== ''
 
         <!-- Prazo do Serviço -->
         <div class="border-t border-gray-100 pt-4">
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-            Prazo do Serviço <span class="text-red-500">*</span>
+        <label for="modal_prazo_dias" class="block text-sm font-medium text-gray-700 mb-2">
+            Prazo do Serviço (dias) <span class="text-red-500">*</span>
         </label>
-
-        <div class="flex items-center gap-6">
-            <label class="inline-flex items-center gap-2">
-            <input
-                type="radio"
-                class="prazo-tipo-traducao"
-                name="traducao_prazo_tipo"
-                value="dias"
-                id="prazo_tipo_dias"
-                <?php echo (($processo['traducao_prazo_tipo'] ?? 'dias') == 'dias') ? 'checked' : ''; ?>
-            >
-            <span class="text-sm text-gray-800">Em dias</span>
-            </label>
-
-            <label class="inline-flex items-center gap-2">
-            <input
-                type="radio"
-                class="prazo-tipo-traducao"
-                name="traducao_prazo_tipo"
-                value="data"
-                id="prazo_tipo_data"
-                <?php echo (($processo['traducao_prazo_tipo'] ?? '') == 'data') ? 'checked' : ''; ?>
-            >
-            <span class="text-sm text-gray-800">Data específica</span>
-            </label>
-        </div>
-
-        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <!-- Dias -->
-            <div id="prazo_dias_traducao_container">
-            <label for="traducao_prazo_dias" class="block text-sm font-medium text-gray-700 mb-1">Dias para Entrega</label>
-            <input
-                type="number"
-                name="traducao_prazo_dias"
-                id="traducao_prazo_dias"
-                min="1"
-                class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
-                value="<?php echo htmlspecialchars($processo['traducao_prazo_dias'] ?? ''); ?>"
-                placeholder="Ex.: 5"
-            >
-            <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias.</p>
-            </div>
-
-            <!-- Data específica -->
-            <div id="prazo_data_traducao_container" class="hidden">
-            <label for="traducao_prazo_data" class="block text-sm font-medium text-gray-700 mb-1">Data da Entrega</label>
-            <input
-                type="date"
-                name="traducao_prazo_data"
-                id="traducao_prazo_data"
-                class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
-                value="<?php echo htmlspecialchars($processo['traducao_prazo_data'] ?? ''); ?>"
-            >
-            <p class="mt-1 text-xs text-gray-500">Selecione a data final para a entrega.</p>
-            </div>
-        </div>
+        <input
+            type="number"
+            name="prazo_dias"
+            id="modal_prazo_dias"
+            min="1"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
+            value="<?php echo htmlspecialchars($processo['prazo_dias'] ?? ''); ?>"
+            placeholder="Ex.: 5"
+        >
+        <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias corridos.</p>
         </div>
 
         <!-- Ações -->
@@ -1076,10 +982,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // hiddens do form principal (usados só na mudança de status)
   const hEnvio = $id('hidden_data_inicio_traducao');
-  const hTipo  = $id('hidden_traducao_prazo_tipo');
-  const hDias  = $id('hidden_traducao_prazo_dias');
-  const hData  = $id('hidden_traducao_prazo_data');
-  const hiddenDeadlineFields = [hEnvio, hTipo, hDias, hData];
+  const hPrazoDias = $id('hidden_prazo_dias');
+  const hiddenDeadlineFields = [hEnvio, hPrazoDias];
 
   const registerOriginalName = (field) => {
     if (!field) return;
@@ -1146,17 +1050,13 @@ document.addEventListener('DOMContentLoaded', function() {
     confirmStatusChangeBtn.addEventListener('click', () => {
       // Pega os valores do NOVO modal
       const envio = $id('modal_req_data_inicio_traducao').value;
-      const tipo  = document.querySelector('input[name="modal_req_prazo_tipo"]:checked').value;
-      const dias  = $id('modal_req_traducao_prazo_dias').value;
-      const data  = $id('modal_req_traducao_prazo_data').value;
+      const prazoDiasValor  = $id('modal_req_prazo_dias').value;
 
       // Validações
       const erros = [];
       if (!envio) erros.push('Informe a Data de Envio para o Tradutor.');
-      if (tipo === 'dias') {
-        if (!dias || parseInt(dias, 10) <= 0) erros.push('Informe os dias de prazo (maior que zero).');
-      } else {
-        if (!data) erros.push('Informe a data específica do prazo.');
+      if (!prazoDiasValor || parseInt(prazoDiasValor, 10) <= 0) {
+        erros.push('Informe os dias de prazo (maior que zero).');
       }
 
       if (erros.length) {
@@ -1172,27 +1072,9 @@ document.addEventListener('DOMContentLoaded', function() {
         hEnvio.value = envio;
         fieldsToEnable.push(hEnvio);
       }
-      if (hTipo) {
-        hTipo.value = tipo;
-        fieldsToEnable.push(hTipo);
-      }
-
-      if (tipo === 'dias') {
-        if (hDias) {
-          hDias.value = dias;
-          fieldsToEnable.push(hDias);
-        }
-        if (hData) {
-          hData.value = '';
-        }
-      } else {
-        if (hData) {
-          hData.value = data;
-          fieldsToEnable.push(hData);
-        }
-        if (hDias) {
-          hDias.value = '';
-        }
+      if (hPrazoDias) {
+        hPrazoDias.value = prazoDiasValor;
+        fieldsToEnable.push(hPrazoDias);
       }
 
       enableHiddenDeadlineFields(fieldsToEnable);
@@ -1200,33 +1082,6 @@ document.addEventListener('DOMContentLoaded', function() {
       statusForm?.submit();
     });
   }
-
-  // Lógica para alternar os campos de prazo DENTRO do novo modal
-  const reqPrazoRadios = document.querySelectorAll('.prazo-req-tipo-radio');
-  const reqPrazoDiasContainer = $id('modal_req_prazo_dias_container');
-  const reqPrazoDataContainer = $id('modal_req_prazo_data_container');
-  const reqPrazoDiasInput = $id('modal_req_traducao_prazo_dias');
-  const reqPrazoDataInput = $id('modal_req_traducao_prazo_data');
-
-  function toggleReqPrazoInputs() {
-      if (!reqPrazoDiasContainer) return; // safety check
-      const selected = document.querySelector('.prazo-req-tipo-radio:checked')?.value;
-      if (selected === 'dias') {
-          reqPrazoDiasContainer.classList.remove('hidden');
-          reqPrazoDataContainer.classList.add('hidden');
-          reqPrazoDiasInput.required = true;
-          reqPrazoDataInput.required = false;
-          reqPrazoDataInput.value = '';
-      } else {
-          reqPrazoDiasContainer.classList.add('hidden');
-          reqPrazoDataContainer.classList.remove('hidden');
-          reqPrazoDiasInput.required = false;
-          reqPrazoDataInput.required = true;
-          reqPrazoDiasInput.value = '';
-      }
-  }
-  reqPrazoRadios.forEach(radio => radio.addEventListener('change', toggleReqPrazoInputs));
-  toggleReqPrazoInputs(); // Chama na inicialização
 
   //-----------------------------------------------------
   // Lógica 2: Modais de Edição de Etapas (AJAX)
@@ -1393,39 +1248,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
   }
-
-  //-----------------------------------------------------
-  // Lógica 4: Prazos de Tradução (Modais de edição)
-  //-----------------------------------------------------
-  const prazoTipoRadios = document.querySelectorAll('.prazo-tipo-traducao');
-  const prazoDiasContainer = $id('prazo_dias_traducao_container');
-  const prazoDataContainer = $id('prazo_data_traducao_container');
-  const prazoDiasInput = $id('traducao_prazo_dias');
-  const prazoDataInput = $id('traducao_prazo_data');
-
-  function togglePrazoInputs() {
-    if (!prazoDiasContainer || !prazoDataContainer) return;
-    const selected = document.querySelector('.prazo-tipo-traducao:checked')?.value;
-    if (selected === 'dias') {
-      prazoDiasContainer.classList.remove('hidden');
-      prazoDataContainer.classList.add('hidden');
-      if (prazoDiasInput) prazoDiasInput.required = true;
-      if (prazoDataInput) {
-        prazoDataInput.required = false;
-        prazoDataInput.value = '';
-      }
-    } else {
-      prazoDiasContainer.classList.add('hidden');
-      prazoDataContainer.classList.remove('hidden');
-      if (prazoDataInput) prazoDataInput.required = true;
-      if (prazoDiasInput) {
-        prazoDiasInput.required = false;
-        prazoDiasInput.value = '';
-      }
-    }
-  }
-  prazoTipoRadios.forEach(radio => radio.addEventListener('change', togglePrazoInputs));
-  togglePrazoInputs();
 
 });
 </script>
