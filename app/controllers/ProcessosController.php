@@ -725,15 +725,6 @@ class ProcessosController
                 $_POST['status_processo'] = 'Concluído';
             }
 
-            // Limpa o campo de prazo que não foi selecionado
-            if (isset($_POST['traducao_prazo_tipo'])) {
-                if ($_POST['traducao_prazo_tipo'] === 'dias') {
-                    $_POST['traducao_prazo_data'] = null;
-                } else {
-                    $_POST['traducao_prazo_dias'] = null;
-                }
-            }
-
             if ($this->processoModel->updateEtapas($id, $_POST)) {
                 $processoData = $this->processoModel->getById($id);
                 $processo = $processoData['processo'];
@@ -742,7 +733,7 @@ class ProcessosController
                     'nome_tradutor' => htmlspecialchars($processo['nome_tradutor'] ?? 'FATTO'),
                     'data_inicio_traducao' => isset($processo['data_inicio_traducao']) ? date('d/m/Y', strtotime($processo['data_inicio_traducao'])) : 'Pendente',
                     'traducao_modalidade' => htmlspecialchars($processo['traducao_modalidade'] ?? 'N/A'),
-                    'traducao_prazo_data_formatted' => $this->getPrazoCountdown($processo['traducao_prazo_data']),
+                    'data_previsao_entrega_formatted' => $this->getPrazoCountdown($processo['data_previsao_entrega']),
                     'assinatura_tipo' => htmlspecialchars($processo['assinatura_tipo'] ?? 'N/A'),
                     'data_envio_assinatura' => isset($processo['data_envio_assinatura']) ? date('d/m/Y', strtotime($processo['data_envio_assinatura'])) : 'Pendente',
                     'data_devolucao_assinatura' => isset($processo['data_devolucao_assinatura']) ? date('d/m/Y', strtotime($processo['data_devolucao_assinatura'])) : 'Pendente',
@@ -934,9 +925,8 @@ class ProcessosController
 
         $formData = [
             'data_inicio_traducao' => $process['data_inicio_traducao'] ?? date('Y-m-d'),
-            'traducao_prazo_tipo' => $process['traducao_prazo_tipo'] ?? 'dias',
-            'traducao_prazo_dias' => $process['traducao_prazo_dias'] ?? '',
-            'traducao_prazo_data' => $process['traducao_prazo_data'] ?? '',
+            'prazo_dias' => $process['prazo_dias'] ?? '',
+            'data_previsao_entrega' => $process['data_previsao_entrega'] ?? '',
         ];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -945,15 +935,13 @@ class ProcessosController
             try {
                 $this->validateWizardProcessData($process, $_POST, false);
 
+                $prazoDias = isset($_POST['prazo_dias']) && $_POST['prazo_dias'] !== ''
+                    ? max(0, (int)$_POST['prazo_dias'])
+                    : null;
+
                 $payload = [
                     'data_inicio_traducao' => $_POST['data_inicio_traducao'] ?? null,
-                    'traducao_prazo_tipo' => $_POST['traducao_prazo_tipo'] ?? null,
-                    'traducao_prazo_dias' => ($_POST['traducao_prazo_tipo'] ?? '') === 'dias'
-                        ? ($_POST['traducao_prazo_dias'] ?? null)
-                        : null,
-                    'traducao_prazo_data' => ($_POST['traducao_prazo_tipo'] ?? '') === 'data'
-                        ? ($_POST['traducao_prazo_data'] ?? null)
-                        : null,
+                    'prazo_dias' => $prazoDias,
                 ];
 
                 if (!$this->processoModel->updateFromLeadConversion($processId, $payload)) {
@@ -1944,9 +1932,8 @@ class ProcessosController
             'dataPagamento1' => $processo['data_pagamento_1'] ?? '',
             'dataPagamento2' => $processo['data_pagamento_2'] ?? '',
             'dataInicioTraducao' => $processo['data_inicio_traducao'] ?? date('Y-m-d'),
-            'traducaoPrazoTipo' => $processo['traducao_prazo_tipo'] ?? 'dias',
-            'traducaoPrazoDias' => $processo['traducao_prazo_dias'] ?? '',
-            'traducaoPrazoData' => $processo['traducao_prazo_data'] ?? '',
+            'prazoDias' => $processo['prazo_dias'] ?? '',
+            'dataPrevisaoEntrega' => $processo['data_previsao_entrega'] ?? '',
             'statusDestino' => 'Serviço Pendente',
         ];
     }
@@ -2346,7 +2333,7 @@ class ProcessosController
 
     private function validateWizardProcessData(array $processo, array $input, bool $leadConversionRequested): void
     {
-        $validarPrazo = $leadConversionRequested || isset($input['data_inicio_traducao']) || isset($input['traducao_prazo_tipo']);
+        $validarPrazo = $leadConversionRequested || isset($input['data_inicio_traducao']) || array_key_exists('prazo_dias', $input);
         if ($validarPrazo) {
             $dataInicio = $input['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
             if (empty($dataInicio)) {
@@ -2363,28 +2350,9 @@ class ProcessosController
                 throw new InvalidArgumentException('A data de início da tradução não pode ser anterior à data atual.');
             }
 
-            $prazoTipo = $input['traducao_prazo_tipo'] ?? $processo['traducao_prazo_tipo'] ?? 'dias';
-            if (!in_array($prazoTipo, ['dias', 'data'], true)) {
-                throw new InvalidArgumentException('Tipo de prazo da tradução inválido.');
-            }
-
-            if ($prazoTipo === 'dias') {
-                $dias = $input['traducao_prazo_dias'] ?? $processo['traducao_prazo_dias'] ?? null;
-                if ($dias === null || $dias === '' || (int)$dias < 1) {
-                    throw new InvalidArgumentException('Informe a quantidade de dias do prazo de tradução.');
-                }
-            } else {
-                $prazoData = $input['traducao_prazo_data'] ?? $processo['traducao_prazo_data'] ?? null;
-                if (empty($prazoData)) {
-                    throw new InvalidArgumentException('Informe a data de entrega da tradução.');
-                }
-                $prazoDataObj = DateTime::createFromFormat('Y-m-d', $prazoData);
-                if (!$prazoDataObj) {
-                    throw new InvalidArgumentException('Data de entrega da tradução inválida.');
-                }
-                if ($prazoDataObj <= $dataInicioObj) {
-                    throw new InvalidArgumentException('A data de entrega deve ser posterior à data de início.');
-                }
+            $dias = $input['prazo_dias'] ?? $processo['prazo_dias'] ?? null;
+            if ($dias === null || $dias === '' || (int)$dias < 1) {
+                throw new InvalidArgumentException('Informe a quantidade de dias do prazo de tradução.');
             }
         }
 
@@ -2529,16 +2497,9 @@ class ProcessosController
     private function buildProcessUpdatePayload(array $processo, array $input, int $clienteId, string $novoStatus, array $paymentProofs): array
     {
         $dataInicio = $input['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
-        $prazoTipo = $input['traducao_prazo_tipo'] ?? $processo['traducao_prazo_tipo'] ?? 'dias';
 
-        $prazoDias = null;
-        $prazoData = null;
-        if ($prazoTipo === 'dias') {
-            $prazoDias = $input['traducao_prazo_dias'] ?? $processo['traducao_prazo_dias'] ?? null;
-            $prazoDias = ($prazoDias === null || $prazoDias === '') ? null : (int)$prazoDias;
-        } else {
-            $prazoData = $input['traducao_prazo_data'] ?? $processo['traducao_prazo_data'] ?? null;
-        }
+        $prazoDias = $input['prazo_dias'] ?? $processo['prazo_dias'] ?? null;
+        $prazoDias = ($prazoDias === null || $prazoDias === '') ? null : max(0, (int)$prazoDias);
 
         $valorTotal = $this->parseCurrencyValue($input['valor_total'] ?? ($processo['valor_total'] ?? null));
         $valorEntrada = $this->parseCurrencyValue($input['valor_entrada'] ?? ($processo['orcamento_valor_entrada'] ?? null));
@@ -2580,9 +2541,7 @@ class ProcessosController
         $dados = [
             'status_processo' => $novoStatus,
             'data_inicio_traducao' => $dataInicio ?: null,
-            'traducao_prazo_tipo' => $prazoTipo,
-            'traducao_prazo_dias' => $prazoDias,
-            'traducao_prazo_data' => $prazoData,
+            'prazo_dias' => $prazoDias,
             'valor_total' => $valorTotal,
             'orcamento_forma_pagamento' => $formaCobrancaArmazenada,
             'orcamento_parcelas' => $parcelas,
@@ -2636,8 +2595,7 @@ class ProcessosController
                 $remainingDays = (int) $storedDays;
                 $newDeadline = (new DateTimeImmutable('today'))->modify('+' . $remainingDays . ' days');
                 if ($newDeadline !== false) {
-                    $dados['traducao_prazo_data'] = $newDeadline->format('Y-m-d');
-                    $dados['traducao_prazo_tipo'] = 'data';
+                    $dados['data_previsao_entrega'] = $newDeadline->format('Y-m-d');
                 }
             }
         }
@@ -2645,13 +2603,13 @@ class ProcessosController
 
     private function deadlineFieldsChanged(array $processo, array $dados): bool
     {
-        $fields = ['traducao_prazo_data', 'traducao_prazo_dias', 'data_inicio_traducao'];
+        $fields = ['prazo_dias', 'data_inicio_traducao'];
 
         foreach ($fields as $field) {
             $original = $processo[$field] ?? null;
             $updated = $dados[$field] ?? null;
 
-            if ($field === 'traducao_prazo_dias') {
+            if ($field === 'prazo_dias') {
                 $original = $original === null || $original === '' ? null : (int) $original;
                 $updated = $updated === null || $updated === '' ? null : (int) $updated;
             } else {
@@ -2683,7 +2641,7 @@ class ProcessosController
 
     private function determineEffectiveDeadline(array $processo, array $dados): ?DateTimeImmutable
     {
-        $candidateDate = $dados['traducao_prazo_data'] ?? null;
+        $candidateDate = $dados['data_previsao_entrega'] ?? null;
         if (!empty($candidateDate)) {
             try {
                 return new DateTimeImmutable((string) $candidateDate);
@@ -2692,32 +2650,23 @@ class ProcessosController
             }
         }
 
-        $prazoDias = $dados['traducao_prazo_dias'] ?? null;
-        $inicio = $dados['data_inicio_traducao'] ?? null;
-        if ($prazoDias !== null && $inicio) {
-            try {
-                $start = new DateTimeImmutable((string) $inicio);
-                return $start->modify('+' . (int) $prazoDias . ' days');
-            } catch (Throwable $exception) {
-                // Ignora e tenta alternativas
+        $prazoDias = $dados['prazo_dias'] ?? $processo['prazo_dias'] ?? null;
+        if ($prazoDias !== null) {
+            $baseDate = $processo['data_criacao'] ?? $dados['data_inicio_traducao'] ?? $processo['data_inicio_traducao'] ?? null;
+            if (!empty($baseDate)) {
+                try {
+                    $start = new DateTimeImmutable((string) $baseDate);
+                    return $start->modify('+' . (int) $prazoDias . ' days');
+                } catch (Throwable $exception) {
+                    // Ignora e tenta alternativas
+                }
             }
         }
 
-        $existingDate = $processo['traducao_prazo_data'] ?? null;
+        $existingDate = $processo['data_previsao_entrega'] ?? null;
         if (!empty($existingDate)) {
             try {
                 return new DateTimeImmutable((string) $existingDate);
-            } catch (Throwable $exception) {
-                // Ignora e tenta alternativas
-            }
-        }
-
-        $existingPrazoDias = $processo['traducao_prazo_dias'] ?? null;
-        $existingInicio = $processo['data_inicio_traducao'] ?? null;
-        if ($existingPrazoDias !== null && $existingInicio) {
-            try {
-                $start = new DateTimeImmutable((string) $existingInicio);
-                return $start->modify('+' . (int) $existingPrazoDias . ' days');
             } catch (Throwable $exception) {
                 // Ignora e tenta alternativas
             }
@@ -3549,7 +3498,7 @@ class ProcessosController
     private function calculateServiceForecastDate(array $processo): string
     {
         $explicitDates = [
-            $processo['traducao_prazo_data'] ?? null,
+            $processo['data_previsao_entrega'] ?? null,
             $processo['data_previsao_entrega'] ?? null,
         ];
 
@@ -3559,7 +3508,7 @@ class ProcessosController
             }
         }
 
-        $days = $processo['traducao_prazo_dias'] ?? null;
+        $days = $processo['prazo_dias'] ?? null;
         if (is_numeric($days) && (int)$days > 0) {
             $referenceDate = $processo['data_inicio_traducao'] ?? $processo['data_entrada'] ?? date('Y-m-d');
 

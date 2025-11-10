@@ -162,19 +162,18 @@ class DashboardProcessFormatter
 
     public static function extractDeadlineDate(array $process): ?DateTimeImmutable
     {
-        if (!empty($process['traducao_prazo_data'])) {
-            return self::createImmutableDate($process['traducao_prazo_data']);
-        }
-
-        if (!empty($process['traducao_prazo_dias']) && !empty($process['data_inicio_traducao'])) {
-            $start = self::createImmutableDate($process['data_inicio_traducao']);
-            if ($start !== null) {
-                return $start->modify('+' . (int) $process['traducao_prazo_dias'] . ' days');
-            }
-        }
-
         if (!empty($process['data_previsao_entrega'])) {
             return self::createImmutableDate($process['data_previsao_entrega']);
+        }
+
+        if (!empty($process['prazo_dias'])) {
+            $baseDate = $process['data_criacao'] ?? $process['data_inicio_traducao'] ?? null;
+            if ($baseDate) {
+                $start = self::createImmutableDate($baseDate);
+                if ($start !== null) {
+                    return $start->modify('+' . (int) $process['prazo_dias'] . ' days');
+                }
+            }
         }
 
         return null;
