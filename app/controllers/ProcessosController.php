@@ -719,22 +719,63 @@ class ProcessosController
     {
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'])) {
-            $id = $_POST['id'];
+            $id = (int)$_POST['id'];
 
-            if (!empty($_POST['data_envio_cartorio'])) {
-                $_POST['status_processo'] = 'Concluído';
+            if ($id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Processo inválido.']);
+                exit();
+            }
+
+            $processoData = $this->processoModel->getById($id);
+            if (!$processoData || !isset($processoData['processo'])) {
+                echo json_encode(['success' => false, 'message' => 'Processo não encontrado.']);
+                exit();
+            }
+
+            $processo = $processoData['processo'];
+            $input = $_POST;
+
+            if (!empty($input['data_envio_cartorio'])) {
+                $input['status_processo'] = 'Concluído';
             }
 
             // Limpa o campo de prazo que não foi selecionado
-            if (isset($_POST['traducao_prazo_tipo'])) {
-                if ($_POST['traducao_prazo_tipo'] === 'dias') {
-                    $_POST['traducao_prazo_data'] = null;
+            if (isset($input['traducao_prazo_tipo'])) {
+                if ($input['traducao_prazo_tipo'] === 'dias') {
+                    $input['traducao_prazo_data'] = null;
                 } else {
-                    $_POST['traducao_prazo_dias'] = null;
+                    $input['traducao_prazo_dias'] = null;
                 }
             }
 
-            if ($this->processoModel->updateEtapas($id, $_POST)) {
+            $allowedFields = [
+                'status_processo', 'tradutor_id', 'data_inicio_traducao', 'traducao_modalidade',
+                'traducao_prazo_tipo', 'traducao_prazo_dias', 'traducao_prazo_data',
+                'assinatura_tipo', 'data_envio_assinatura', 'data_devolucao_assinatura',
+                'finalizacao_tipo', 'data_envio_cartorio', 'os_numero_conta_azul', 'os_numero_omie',
+                'prazo_pausado_em', 'prazo_dias_restantes',
+            ];
+
+            $payload = [];
+            foreach ($allowedFields as $field) {
+                if (array_key_exists($field, $input)) {
+                    $payload[$field] = $input[$field];
+                }
+            }
+
+            $payload['prazo_pausado_em'] = $processo['prazo_pausado_em'] ?? null;
+            $payload['prazo_dias_restantes'] = $processo['prazo_dias_restantes'] ?? null;
+
+            foreach (['traducao_prazo_tipo', 'traducao_prazo_dias', 'traducao_prazo_data', 'data_inicio_traducao'] as $field) {
+                if (!array_key_exists($field, $payload)) {
+                    $payload[$field] = $processo[$field] ?? null;
+                }
+            }
+
+            $novoStatus = $payload['status_processo'] ?? ($processo['status_processo'] ?? '');
+            $this->applyDeadlinePauseLogic($processo, $input, $novoStatus, $payload);
+
+            if ($this->processoModel->updateEtapas($id, $payload)) {
                 $processoData = $this->processoModel->getById($id);
                 $processo = $processoData['processo'];
 
@@ -742,7 +783,7 @@ class ProcessosController
                     'nome_tradutor' => htmlspecialchars($processo['nome_tradutor'] ?? 'FATTO'),
                     'data_inicio_traducao' => isset($processo['data_inicio_traducao']) ? date('d/m/Y', strtotime($processo['data_inicio_traducao'])) : 'Pendente',
                     'traducao_modalidade' => htmlspecialchars($processo['traducao_modalidade'] ?? 'N/A'),
-                    'traducao_prazo_data_formatted' => $this->getPrazoCountdown($processo['traducao_prazo_data']),
+                    'traducao_prazo_data_formatted' => $this->formatDeadlineDisplay($processo),
                     'assinatura_tipo' => htmlspecialchars($processo['assinatura_tipo'] ?? 'N/A'),
                     'data_envio_assinatura' => isset($processo['data_envio_assinatura']) ? date('d/m/Y', strtotime($processo['data_envio_assinatura'])) : 'Pendente',
                     'data_devolucao_assinatura' => isset($processo['data_devolucao_assinatura']) ? date('d/m/Y', strtotime($processo['data_devolucao_assinatura'])) : 'Pendente',
@@ -750,6 +791,8 @@ class ProcessosController
                     'data_envio_cartorio' => isset($processo['data_envio_cartorio']) ? date('d/m/Y', strtotime($processo['data_envio_cartorio'])) : 'Pendente',
                     'status_processo' => htmlspecialchars($processo['status_processo']),
                     'status_processo_classes' => $this->getStatusClasses($processo['status_processo']),
+                    'prazo_pausado_em' => $processo['prazo_pausado_em'] ?? null,
+                    'prazo_dias_restantes' => $processo['prazo_dias_restantes'] ?? null,
                 ];
                 echo json_encode(['success' => true, 'message' => 'Etapas atualizadas com sucesso!', 'updated_data' => $updated_data]);
             } else {
@@ -3013,6 +3056,27 @@ class ProcessosController
             default:
                 return 'bg-gray-100 text-gray-800';
         }
+    }
+
+    private function formatDeadlineDisplay(array $processo): string
+    {
+        $statusNormalized = $this->normalizeStatusName($processo['status_processo'] ?? '');
+        $isPaused = in_array($statusNormalized, ['pendente de pagamento', 'pendente de documentos'], true);
+
+        if ($isPaused && !empty($processo['prazo_pausado_em'])) {
+            $remainingDays = $processo['prazo_dias_restantes'] ?? null;
+
+            if ($remainingDays !== null) {
+                $days = max((int)$remainingDays, 0);
+                $label = $days === 1 ? '1 dia restante' : sprintf('%d dias restantes', $days);
+
+                return '<span class="font-bold text-indigo-600">Prazo pausado — ' . $label . '</span>';
+            }
+
+            return '<span class="font-bold text-indigo-600">Prazo pausado</span>';
+        }
+
+        return $this->getPrazoCountdown($processo['traducao_prazo_data'] ?? null);
     }
 
     /**
