@@ -719,10 +719,24 @@ class ProcessosController
     {
         header('Content-Type: application/json');
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['id'])) {
-            $id = $_POST['id'];
+            $id = (int)$_POST['id'];
 
-            if (!empty($_POST['data_envio_cartorio'])) {
-                $_POST['status_processo'] = 'Concluído';
+            if ($id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Processo inválido.']);
+                exit();
+            }
+
+            $processoData = $this->processoModel->getById($id);
+            if (!$processoData || !isset($processoData['processo'])) {
+                echo json_encode(['success' => false, 'message' => 'Processo não encontrado.']);
+                exit();
+            }
+
+            $processo = $processoData['processo'];
+            $input = $_POST;
+
+            if (!empty($input['data_envio_cartorio'])) {
+                $input['status_processo'] = 'Concluído';
             }
 
             if ($this->processoModel->updateEtapas($id, $_POST)) {
@@ -741,6 +755,8 @@ class ProcessosController
                     'data_envio_cartorio' => isset($processo['data_envio_cartorio']) ? date('d/m/Y', strtotime($processo['data_envio_cartorio'])) : 'Pendente',
                     'status_processo' => htmlspecialchars($processo['status_processo']),
                     'status_processo_classes' => $this->getStatusClasses($processo['status_processo']),
+                    'prazo_pausado_em' => $processo['prazo_pausado_em'] ?? null,
+                    'prazo_dias_restantes' => $processo['prazo_dias_restantes'] ?? null,
                 ];
                 echo json_encode(['success' => true, 'message' => 'Etapas atualizadas com sucesso!', 'updated_data' => $updated_data]);
             } else {
@@ -2892,7 +2908,11 @@ class ProcessosController
             'servico em andamento' => 'serviço em andamento',
             'em andamento' => 'serviço em andamento',
             'aguardando pagamento' => 'pendente de pagamento',
+            'aguardando pagamentos' => 'pendente de pagamento',
             'aguardando documento' => 'pendente de documentos',
+            'aguardando documentos' => 'pendente de documentos',
+            'aguardando documentacao' => 'pendente de documentos',
+            'aguardando documentação' => 'pendente de documentos',
             'pendente de documento' => 'pendente de documentos',
             'pendente documento' => 'pendente de documentos',
             'pendente documentos' => 'pendente de documentos',
@@ -2962,6 +2982,27 @@ class ProcessosController
             default:
                 return 'bg-gray-100 text-gray-800';
         }
+    }
+
+    private function formatDeadlineDisplay(array $processo): string
+    {
+        $statusNormalized = $this->normalizeStatusName($processo['status_processo'] ?? '');
+        $isPaused = in_array($statusNormalized, ['pendente de pagamento', 'pendente de documentos'], true);
+
+        if ($isPaused && !empty($processo['prazo_pausado_em'])) {
+            $remainingDays = $processo['prazo_dias_restantes'] ?? null;
+
+            if ($remainingDays !== null) {
+                $days = max((int)$remainingDays, 0);
+                $label = $days === 1 ? '1 dia restante' : sprintf('%d dias restantes', $days);
+
+                return '<span class="font-bold text-indigo-600">Prazo pausado — ' . $label . '</span>';
+            }
+
+            return '<span class="font-bold text-indigo-600">Prazo pausado</span>';
+        }
+
+        return $this->getPrazoCountdown($processo['traducao_prazo_data'] ?? null);
     }
 
     /**

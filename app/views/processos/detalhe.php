@@ -9,6 +9,106 @@ function has_service($processo, $service_name) {
     return in_array($service_name, $services, true);
 }
 
+if (!function_exists('process_calculate_deadline_context')) {
+    function process_calculate_deadline_context(array $processo, string $statusNormalized): array
+    {
+        $pauseLabels = [
+            'pendente de pagamento' => 'pausado/pagamento',
+            'pendente de documentos' => 'pausado/documento',
+        ];
+
+        $pauseLabel = $pauseLabels[$statusNormalized] ?? null;
+        $isPaused = $pauseLabel !== null;
+        $daysRemaining = null;
+
+        if ($statusNormalized === 'concluído') {
+            $daysRemaining = 0;
+        } elseif ($isPaused) {
+            $rawStored = $processo['prazo_dias_restantes'] ?? null;
+            if ($rawStored !== null && $rawStored !== '') {
+                $daysRemaining = (int) $rawStored;
+            }
+        } else {
+            $deadline = null;
+
+            $rawDate = $processo['traducao_prazo_data'] ?? null;
+            if (!empty($rawDate)) {
+                try {
+                    $deadline = new DateTimeImmutable((string) $rawDate);
+                } catch (Throwable $exception) {
+                    $deadline = null;
+                }
+            }
+
+            if ($deadline === null && !empty($processo['traducao_prazo_dias']) && !empty($processo['data_inicio_traducao'])) {
+                try {
+                    $start = new DateTimeImmutable((string) $processo['data_inicio_traducao']);
+                    $deadline = $start->modify('+' . (int) $processo['traducao_prazo_dias'] . ' days');
+                } catch (Throwable $exception) {
+                    $deadline = null;
+                }
+            }
+
+            if ($deadline instanceof DateTimeImmutable) {
+                $today = new DateTimeImmutable('today');
+                $daysRemaining = (int) $today->diff($deadline)->format('%r%a');
+            }
+        }
+
+        $display = '—';
+        $badgeClass = 'text-gray-500';
+
+        if ($daysRemaining !== null) {
+            $display = (string) $daysRemaining;
+
+            if ($isPaused) {
+                $badgeClass = 'bg-slate-200 text-slate-800';
+            } elseif ($daysRemaining <= 0) {
+                $badgeClass = 'bg-red-200 text-red-800';
+            } elseif ($daysRemaining <= 3) {
+                $badgeClass = 'bg-yellow-200 text-yellow-800';
+            } else {
+                $badgeClass = 'text-green-600';
+            }
+        }
+
+        return [
+            'display' => $display,
+            'class' => $badgeClass,
+            'is_paused' => $isPaused,
+            'pause_label' => $pauseLabel,
+        ];
+    }
+}
+
+if (!function_exists('process_render_deadline_badge')) {
+    function process_render_deadline_badge(array $context): string
+    {
+        $badgeClass = htmlspecialchars($context['class'] ?? 'text-gray-500', ENT_QUOTES, 'UTF-8');
+        $displayValue = htmlspecialchars($context['display'] ?? '—', ENT_QUOTES, 'UTF-8');
+        $pauseBadge = '';
+
+        if (!empty($context['is_paused']) && !empty($context['pause_label'])) {
+            $pauseBadge = '<span class="px-2 py-0.5 inline-flex items-center text-[10px] uppercase tracking-wide font-semibold rounded-full bg-slate-200 text-slate-800">'
+                . htmlspecialchars((string) $context['pause_label'], ENT_QUOTES, 'UTF-8')
+                . '</span>';
+        }
+
+        return '<div class="flex items-center gap-2">'
+            . '<span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ' . $badgeClass . '">' . $displayValue . '</span>'
+            . $pauseBadge
+            . '</div>';
+    }
+}
+
+if (!function_exists('format_prazo_countdown')) {
+    function format_prazo_countdown(array $processo, string $statusNormalized): string
+    {
+        $context = process_calculate_deadline_context($processo, $statusNormalized);
+        return process_render_deadline_badge($context);
+    }
+}
+
 function normalize_status_info(?string $status): array {
     $normalized = mb_strtolower(trim((string)$status));
 
@@ -26,6 +126,12 @@ function normalize_status_info(?string $status): array {
         'serviço em andamento' => 'serviço em andamento',
         'servico em andamento' => 'serviço em andamento',
         'em andamento' => 'serviço em andamento',
+        'aguardando pagamento' => 'pendente de pagamento',
+        'aguardando pagamentos' => 'pendente de pagamento',
+        'aguardando documento' => 'pendente de documentos',
+        'aguardando documentos' => 'pendente de documentos',
+        'aguardando documentacao' => 'pendente de documentos',
+        'aguardando documentação' => 'pendente de documentos',
         'pendente de pagamento' => 'pendente de pagamento',
         'pendente de documentos' => 'pendente de documentos',
         'finalizado' => 'concluído',
@@ -303,13 +409,7 @@ $prospectionLabel = $prospectionCode !== ''
                     <p class="font-medium text-gray-500">Prazo do Serviço</p>
                     <p class="text-gray-800" id="display-prazo_dias">
                         <?php
-                            $prazoDias = $processo['prazo_dias'] ?? null;
-                            if (is_numeric($prazoDias) && (int) $prazoDias > 0) {
-                                $prazoDias = (int) $prazoDias;
-                                echo htmlspecialchars($prazoDias . ' dia' . ($prazoDias === 1 ? '' : 's'));
-                            } else {
-                                echo 'Pendente';
-                            }
+                            echo format_prazo_countdown($processo, $statusNormalized);
                         ?>
                     </p>
                 </div>
