@@ -78,9 +78,14 @@ class VendedorDashboardController
                 }
             }
             
-            $prazo = $processo['traducao_prazo_data'] ?? '';
-            if (!empty($prazo) && strtotime($prazo) < time() && !in_array($statusNormalized, ['concluído', 'cancelado'], true)) {
-                $stats['processos_atrasados']++;
+            // Calcula prazo baseado em prazo_dias + data_inicio_traducao
+            $prazoDias = $processo['prazo_dias'] ?? $processo['traducao_prazo_dias'] ?? null;
+            $dataInicio = $processo['data_inicio_traducao'] ?? null;
+            if ($prazoDias && $dataInicio) {
+                $prazoCalculado = strtotime($dataInicio . ' + ' . $prazoDias . ' days');
+                if ($prazoCalculado < time() && !in_array($statusNormalized, ['concluído', 'cancelado'], true)) {
+                    $stats['processos_atrasados']++;
+                }
             }
         }
         

@@ -83,7 +83,7 @@ $corpo = "
 
 // Adiciona uma linha na tabela para cada serviço vencido
 foreach ($servicosVencidos as $processo) {
-    $dataPrazo = date('d/m/Y', strtotime($processo['traducao_prazo_data']));
+    $dataPrazo = date('d/m/Y', strtotime($processo['prazo_calculado']));
     $corpo .= "
         <tr>
             <td><a href='https://" . $_SERVER['HTTP_HOST'] . "/processos.php?action=view&id={$processo['id']}'>{$processo['orcamento_numero']}</a></td>
