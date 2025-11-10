@@ -78,7 +78,7 @@ class VendedorDashboardController
                 }
             }
             
-            $prazo = $processo['traducao_prazo_data'] ?? '';
+            $prazo = $processo['data_previsao_entrega'] ?? '';
             if (!empty($prazo) && strtotime($prazo) < time() && !in_array($statusNormalized, ['concluído', 'cancelado'], true)) {
                 $stats['processos_atrasados']++;
             }
