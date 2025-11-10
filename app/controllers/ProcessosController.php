@@ -2714,7 +2714,7 @@ class ProcessosController
 
     private function determineEffectiveDeadline(array $processo, array $dados): ?DateTimeImmutable
     {
-        $candidateDate = $dados['data_previsao_entrega'] ?? null;
+        $candidateDate = $dados['traducao_prazo_data'] ?? $dados['data_previsao_entrega'] ?? null;
         if (!empty($candidateDate)) {
             try {
                 return new DateTimeImmutable((string) $candidateDate);
@@ -2744,7 +2744,7 @@ class ProcessosController
             }
         }
 
-        $existingDate = $processo['data_previsao_entrega'] ?? null;
+        $existingDate = $processo['traducao_prazo_data'] ?? $processo['data_previsao_entrega'] ?? null;
         if (!empty($existingDate)) {
             try {
                 return new DateTimeImmutable((string) $existingDate);
