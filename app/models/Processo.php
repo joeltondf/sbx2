@@ -657,6 +657,7 @@ public function create($data, $files)
                     pr.nome_prospecto AS prospeccao_nome,
                     p.categorias_servico, c.nome_cliente, t.nome_tradutor, p.os_numero_omie, p.os_numero_conta_azul,
                     p.data_inicio_traducao, p.traducao_prazo_data, p.traducao_prazo_dias, p.traducao_modalidade, p.assinatura_tipo,
+                    p.prazo_pausado_em, p.prazo_dias_restantes,
                     p.data_envio_assinatura, p.data_devolucao_assinatura, p.data_envio_cartorio,
                     v.nome_completo as nome_vendedor,
                     (SELECT COUNT(*) FROM documentos d WHERE d.processo_id = p.id) as total_documentos_contagem,
@@ -681,6 +682,10 @@ public function create($data, $files)
     //  NOVO BLOCO PARA TRATAR OS FILTROS VINDOS DOS CARDS
     // ==========================================================
     if (!empty($filters['filtro_card'])) {
+        $deadlineDateExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+
+        $deadlineDiffExpression = "CASE\n            WHEN LOWER(p.status_processo) IN ('pendente de pagamento', 'pendente de documentos') AND p.prazo_dias_restantes IS NOT NULL THEN p.prazo_dias_restantes\n            WHEN {$deadlineDateExpression} IS NOT NULL THEN DATEDIFF({$deadlineDateExpression}, CURDATE())\n            ELSE NULL\n        END";
+
         switch ($filters['filtro_card']) {
             case 'ativos':
                 $where_clauses[] = "p.status_processo IN ('Serviço em Andamento', 'Serviço em andamento', 'Pendente de pagamento', 'Pendente de documentos')";
@@ -695,7 +700,7 @@ public function create($data, $files)
                 $where_clauses[] = "p.status_processo IN ('Concluído', 'Finalizado') AND MONTH(p.data_finalizacao_real) = MONTH(CURDATE()) AND YEAR(p.data_finalizacao_real) = YEAR(CURDATE())";
                 break;
             case 'atrasados':
-                $where_clauses[] = "p.traducao_prazo_data < CURDATE() AND p.status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos')";
+                $where_clauses[] = "({$deadlineDateExpression}) IS NOT NULL AND ({$deadlineDateExpression}) < CURDATE() AND p.status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos')";
                 break;
         }
     }
@@ -739,15 +744,14 @@ public function create($data, $files)
         $params[':data_fim'] = $filters['data_fim'];
     }
     if (!empty($filters['tipo_prazo'])) {
-        $today = 'CURDATE()';
         switch ($filters['tipo_prazo']) {
-            case 'falta_3': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 3"; break;
-            case 'falta_2': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 2"; break;
-            case 'falta_1': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 1"; break;
-            case 'vence_hoje': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 0"; break;
-            case 'venceu_1': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = -1"; break;
-            case 'venceu_2': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = -2"; break;
-            case 'venceu_3_mais': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) <= -3"; break;
+            case 'falta_3': $where_clauses[] = "{$deadlineDiffExpression} = 3"; break;
+            case 'falta_2': $where_clauses[] = "{$deadlineDiffExpression} = 2"; break;
+            case 'falta_1': $where_clauses[] = "{$deadlineDiffExpression} = 1"; break;
+            case 'vence_hoje': $where_clauses[] = "{$deadlineDiffExpression} = 0"; break;
+            case 'venceu_1': $where_clauses[] = "{$deadlineDiffExpression} = -1"; break;
+            case 'venceu_2': $where_clauses[] = "{$deadlineDiffExpression} = -2"; break;
+            case 'venceu_3_mais': $where_clauses[] = "{$deadlineDiffExpression} <= -3"; break;
         }
     }
 
@@ -807,6 +811,10 @@ public function create($data, $files)
 
         }
 
+        $deadlineDateExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+
+        $deadlineDiffExpression = "CASE\n            WHEN LOWER(p.status_processo) IN ('pendente de pagamento', 'pendente de documentos') AND p.prazo_dias_restantes IS NOT NULL THEN p.prazo_dias_restantes\n            WHEN {$deadlineDateExpression} IS NOT NULL THEN DATEDIFF({$deadlineDateExpression}, CURDATE())\n            ELSE NULL\n        END";
+
         if (!empty($filters['filtro_card'])) {
             switch ($filters['filtro_card']) {
                 case 'ativos':
@@ -822,7 +830,7 @@ public function create($data, $files)
                     $where_clauses[] = "p.status_processo IN ('Concluído', 'Finalizado') AND MONTH(p.data_finalizacao_real) = MONTH(CURDATE()) AND YEAR(p.data_finalizacao_real) = YEAR(CURDATE())";
                     break;
                 case 'atrasados':
-                    $where_clauses[] = "p.traducao_prazo_data < CURDATE() AND p.status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos')";
+                    $where_clauses[] = "({$deadlineDateExpression}) IS NOT NULL AND ({$deadlineDateExpression}) < CURDATE() AND p.status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos')";
                     break;
             }
         }
@@ -865,15 +873,14 @@ public function create($data, $files)
         $params[':data_fim'] = $filters['data_fim'];
     }
     if (!empty($filters['tipo_prazo'])) {
-        $today = 'CURDATE()';
         switch ($filters['tipo_prazo']) {
-            case 'falta_3': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 3"; break;
-            case 'falta_2': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 2"; break;
-            case 'falta_1': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 1"; break;
-            case 'vence_hoje': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = 0"; break;
-            case 'venceu_1': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = -1"; break;
-            case 'venceu_2': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) = -2"; break;
-            case 'venceu_3_mais': $where_clauses[] = "DATEDIFF(p.traducao_prazo_data, $today) <= -3"; break;
+            case 'falta_3': $where_clauses[] = "{$deadlineDiffExpression} = 3"; break;
+            case 'falta_2': $where_clauses[] = "{$deadlineDiffExpression} = 2"; break;
+            case 'falta_1': $where_clauses[] = "{$deadlineDiffExpression} = 1"; break;
+            case 'vence_hoje': $where_clauses[] = "{$deadlineDiffExpression} = 0"; break;
+            case 'venceu_1': $where_clauses[] = "{$deadlineDiffExpression} = -1"; break;
+            case 'venceu_2': $where_clauses[] = "{$deadlineDiffExpression} = -2"; break;
+            case 'venceu_3_mais': $where_clauses[] = "{$deadlineDiffExpression} <= -3"; break;
         }
     }
 
@@ -1472,13 +1479,15 @@ public function create($data, $files)
      */
     public function getDashboardStats()
     {
+        $deadlineExpression = "COALESCE(\n            p.traducao_prazo_data,\n            CASE\n                WHEN p.traducao_prazo_dias IS NOT NULL AND p.data_inicio_traducao IS NOT NULL\n                    THEN DATE_ADD(p.data_inicio_traducao, INTERVAL p.traducao_prazo_dias DAY)\n                ELSE NULL\n            END\n        )";
+
         $sql = "SELECT
-            COUNT(CASE WHEN status_processo IN ('Serviço em Andamento', 'Serviço em andamento', 'Pendente de pagamento', 'Pendente de documentos') THEN 1 END) as processos_ativos,
-            COUNT(CASE WHEN status_processo IN ('Serviço Pendente', 'Serviço pendente') THEN 1 END) as servicos_pendentes,
-            COUNT(CASE WHEN status_processo IN ('Orçamento', 'Orçamento Pendente') THEN 1 END) as orcamentos_pendentes,
-            COUNT(CASE WHEN status_processo IN ('Concluído', 'Finalizado') AND MONTH(data_finalizacao_real) = MONTH(CURDATE()) AND YEAR(data_finalizacao_real) = YEAR(CURDATE()) THEN 1 END) as finalizados_mes,
-            COUNT(CASE WHEN traducao_prazo_data < CURDATE() AND status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos') THEN 1 END) as processos_atrasados
-        FROM processos";
+            COUNT(CASE WHEN p.status_processo IN ('Serviço em Andamento', 'Serviço em andamento', 'Pendente de pagamento', 'Pendente de documentos') THEN 1 END) AS processos_ativos,
+            COUNT(CASE WHEN p.status_processo IN ('Serviço Pendente', 'Serviço pendente') THEN 1 END) AS servicos_pendentes,
+            COUNT(CASE WHEN p.status_processo IN ('Orçamento', 'Orçamento Pendente') THEN 1 END) AS orcamentos_pendentes,
+            COUNT(CASE WHEN p.status_processo IN ('Concluído', 'Finalizado') AND MONTH(p.data_finalizacao_real) = MONTH(CURDATE()) AND YEAR(p.data_finalizacao_real) = YEAR(CURDATE()) THEN 1 END) AS finalizados_mes,
+            COUNT(CASE WHEN ({$deadlineExpression}) < CURDATE() AND p.status_processo NOT IN ('Concluído', 'Finalizado', 'Arquivado', 'Cancelado', 'Recusado', 'Pendente de pagamento', 'Pendente de documentos') THEN 1 END) AS processos_atrasados
+        FROM processos AS p";
         try {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute();
