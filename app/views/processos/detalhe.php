@@ -830,16 +830,15 @@ $prospectionLabel = $prospectionCode !== ''
 
         <!-- Prazo do Serviço -->
         <div class="border-t border-gray-100 pt-4">
-        <label for="modal_prazo_dias" class="block text-sm font-medium text-gray-700 mb-2">
+        <label for="modal_traducao_prazo_dias" class="block text-sm font-medium text-gray-700 mb-2">
             Prazo do Serviço (dias) <span class="text-red-500">*</span>
         </label>
         <input
             type="number"
-            name="prazo_dias"
-            id="modal_prazo_dias"
-            min="1"
+            name="traducao_prazo_dias"
+            id="modal_traducao_prazo_dias"
             class="w-full rounded-md border border-gray-300 px-3 py-2 focus:ring-1 focus:ring-gray-400"
-            value="<?php echo htmlspecialchars($processo['prazo_dias'] ?? ''); ?>"
+            value="<?php echo htmlspecialchars($processo['traducao_prazo_dias'] ?? $processo['prazo_dias'] ?? ''); ?>"
             placeholder="Ex.: 5"
         >
         <p class="mt-1 text-xs text-gray-500">Informe um número inteiro de dias corridos.</p>

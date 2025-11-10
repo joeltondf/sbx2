@@ -744,16 +744,7 @@ class ProcessosController
 
             $prazoDias = $this->normalizePrazoDiasInput($payload['prazo_dias'] ?? $payload['traducao_prazo_dias'] ?? null);
             $payload['prazo_dias'] = $prazoDias;
-            if ($prazoDias !== null) {
-                $payload['traducao_prazo_dias'] = $prazoDias;
-            }
-
-            $deadline = $this->determineEffectiveDeadline($processo, array_merge($processo, $payload));
-            if ($deadline !== null) {
-                $payload['data_previsao_entrega'] = $deadline->format('Y-m-d');
-            } else {
-                $payload['data_previsao_entrega'] = null;
-            }
+            $payload['traducao_prazo_dias'] = $prazoDias;
 
             if ($this->processoModel->updateEtapas($id, $payload)) {
                 $processoData = $this->processoModel->getById($id);
@@ -973,19 +964,8 @@ class ProcessosController
                 $payload = [
                     'data_inicio_traducao' => $dataInicio,
                     'prazo_dias' => $prazoDias,
+                    'traducao_prazo_dias' => $prazoDias,
                 ];
-
-                if ($prazoDias !== null) {
-                    $payload['traducao_prazo_dias'] = $prazoDias;
-                }
-
-                $deadline = $this->determineEffectiveDeadline($process, array_merge($process, $payload));
-                if ($deadline !== null) {
-                    $deadlineString = $deadline->format('Y-m-d');
-                    $payload['data_previsao_entrega'] = $deadlineString;
-                } else {
-                    $payload['data_previsao_entrega'] = null;
-                }
 
                 if (!$this->processoModel->updateFromLeadConversion($processId, $payload)) {
                     throw new RuntimeException('Falha ao salvar o prazo do serviço.');
